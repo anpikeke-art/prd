@@ -1,0 +1,77 @@
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: prd_studio
+      POSTGRES_USER: prd_studio
+      POSTGRES_PASSWORD: prd_studio
+    volumes:
+      - prd_studio_db:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U prd_studio -d prd_studio']
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  migrate:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: builder
+    restart: 'no'
+    environment:
+      DATABASE_URL: ${DATABASE_URL}
+      LLM_PROXY_BASE_URL: ${LLM_PROXY_BASE_URL}
+      LLM_PROXY_API_KEY: ${LLM_PROXY_API_KEY}
+      MCP_TOKEN_SECRET: ${MCP_TOKEN_SECRET}
+      MCP_PORT: ${MCP_PORT:-3333}
+      APP_BASE_URL: ${APP_BASE_URL}
+      MCP_BASE_URL: ${MCP_BASE_URL}
+    depends_on:
+      db:
+        condition: service_healthy
+    command: sh -lc 'npx prisma migrate deploy'
+
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      LLM_PROXY_BASE_URL: ${LLM_PROXY_BASE_URL}
+      LLM_PROXY_API_KEY: ${LLM_PROXY_API_KEY}
+      MCP_TOKEN_SECRET: ${MCP_TOKEN_SECRET}
+      MCP_PORT: ${MCP_PORT:-3333}
+      APP_BASE_URL: ${APP_BASE_URL}
+      MCP_BASE_URL: ${MCP_BASE_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - '${APP_PORT:-3000}:3000'
+
+  mcp:
+    build:
+      context: .
+      dockerfile: mcp/Dockerfile
+    restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      DATABASE_URL: ${DATABASE_URL}
+      LLM_PROXY_BASE_URL: ${LLM_PROXY_BASE_URL}
+      LLM_PROXY_API_KEY: ${LLM_PROXY_API_KEY}
+      MCP_TOKEN_SECRET: ${MCP_TOKEN_SECRET}
+      MCP_PORT: ${MCP_PORT:-3333}
+      APP_BASE_URL: ${APP_BASE_URL}
+      MCP_BASE_URL: ${MCP_BASE_URL}
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+    ports:
+      - '${MCP_PORT:-3333}:${MCP_PORT:-3333}'
+
+volumes:
+  prd_studio_db:

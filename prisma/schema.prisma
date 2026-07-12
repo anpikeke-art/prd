@@ -1,0 +1,156 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+enum TaskStatus {
+  todo
+  in_progress
+  done
+}
+
+enum ActorType {
+  human
+  agent
+}
+
+model User {
+  id            String    @id @default(cuid())
+  name          String?
+  email         String?   @unique
+  emailVerified DateTime?  @map("email_verified")
+  image         String?
+  sessions      Session[]
+  accounts      Account[]
+  projects      Project[]
+  created_at    DateTime   @default(now())
+  updated_at    DateTime   @updatedAt
+
+  @@map("users")
+}
+
+model Account {
+  id                String  @id @default(cuid())
+  userId            String  @map("user_id")
+  type              String
+  provider          String
+  providerAccountId String  @map("provider_account_id")
+  refresh_token     String? @db.Text
+  access_token      String? @db.Text
+  expires_at        Int?
+  token_type        String?
+  scope             String?
+  id_token          String? @db.Text
+  session_state     String?
+  user              User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerAccountId])
+  @@index([userId])
+  @@map("accounts")
+}
+
+model Session {
+  id           String   @id @default(cuid())
+  sessionToken String   @unique @map("session_token")
+  userId       String   @map("user_id")
+  expires      DateTime
+  user         User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  @@index([userId, created_at])
+  @@map("sessions")
+}
+
+model Project {
+  id                 String           @id @default(cuid())
+  title              String
+  overview           String?
+  tech_stack         Json?
+  architecture_text  String?
+  clarification_log  Json?
+  owner_id           String?
+  owner              User?            @relation(fields: [owner_id], references: [id], onDelete: SetNull)
+  created_at         DateTime         @default(now())
+  updated_at         DateTime         @updatedAt
+  features           Feature[]
+  mcp_connections    MCPConnection[]
+
+  @@index([created_at])
+}
+
+model Feature {
+  id                   String        @id @default(cuid())
+  project_id           String
+  project              Project       @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  title                String
+  description          String?
+  priority             String        @default("P0")
+  acceptance_criteria  String[]      @default([])
+  status               String        @default("todo")
+  order                Int           @default(0)
+  created_at           DateTime      @default(now())
+  updated_at           DateTime      @updatedAt
+  sub_features         SubFeature[]
+
+  @@index([project_id, order])
+}
+
+model SubFeature {
+  id             String   @id @default(cuid())
+  feature_id      String
+  feature         Feature  @relation(fields: [feature_id], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  status          String   @default("todo")
+  order           Int      @default(0)
+  created_at      DateTime @default(now())
+  updated_at      DateTime @updatedAt
+  tasks           Task[]
+
+  @@index([feature_id, order])
+}
+
+model Task {
+  id              String        @id @default(cuid())
+  sub_feature_id   String
+  sub_feature      SubFeature    @relation(fields: [sub_feature_id], references: [id], onDelete: Cascade)
+  title           String
+  description     String?
+  status          TaskStatus    @default(todo)
+  assigned_to     ActorType?
+  created_at      DateTime      @default(now())
+  updated_at      DateTime      @updatedAt
+  version         Int           @default(1)
+  events          TaskEventLog[]
+
+  @@index([sub_feature_id, status])
+}
+
+model MCPConnection {
+  id           String   @id @default(cuid())
+  project_id   String
+  project      Project  @relation(fields: [project_id], references: [id], onDelete: Cascade)
+  token_hash   String   @unique
+  created_at   DateTime @default(now())
+  last_sync_at DateTime?
+  last_agent   String?
+
+  @@index([project_id])
+}
+
+model TaskEventLog {
+  id          String     @id @default(cuid())
+  task_id     String
+  task        Task       @relation(fields: [task_id], references: [id], onDelete: Cascade)
+  event_type  String
+  actor       ActorType
+  timestamp   DateTime   @default(now())
+  detail      Json?
+
+  @@index([task_id, timestamp])
+}

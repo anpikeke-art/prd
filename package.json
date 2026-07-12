@@ -1,0 +1,48 @@
+{
+  "name": "prd-studio",
+  "private": true,
+  "version": "0.1.0",
+  "scripts": {
+    "dev": "next dev",
+    "dev:mcp": "cd mcp && npx tsx watch src/index.ts",
+    "dev:all": "next dev & sleep 3 && cd mcp && npx tsx src/index.ts",
+    "build": "next build",
+    "start": "next start",
+    "typecheck": "tsc -p tsconfig.typecheck.json --noEmit",
+    "postinstall": "prisma generate",
+    "vercel-build": "prisma migrate deploy && next build",
+    "db:generate": "prisma generate",
+    "db:push": "prisma db push",
+    "db:migrate": "prisma migrate dev",
+    "compose:up": "docker compose up --build",
+    "compose:down": "docker compose down"
+  },
+  "dependencies": {
+    "@auth/prisma-adapter": "^2.11.2",
+    "@google-cloud/local-auth": "^3.0.1",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "@prisma/client": "^6.15.0",
+    "@tailwindcss/typography": "^0.5.20",
+    "next": "^15.4.2",
+    "next-auth": "^4.24.14",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "react-markdown": "^10.1.0",
+    "reactflow": "^11.11.4",
+    "remark-gfm": "^4.0.1",
+    "zod": "^4.0.17"
+  },
+  "devDependencies": {
+    "@types/node": "^24.0.0",
+    "@types/react": "^19.1.8",
+    "@types/react-dom": "^19.1.6",
+    "autoprefixer": "^10.4.21",
+    "postcss": "^8.5.6",
+    "prisma": "^6.15.0",
+    "tailwindcss": "^3.4.17",
+    "typescript": "^5.8.3"
+  },
+  "prisma": {
+    "schema": "prisma/schema.prisma"
+  }
+}
