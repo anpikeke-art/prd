@@ -58,7 +58,7 @@ export async function chatCompletion({ messages, stream = false, temperature = 0
       method: 'POST',
       headers,
       body: JSON.stringify({
-        model: model ?? 'cx/gpt-5.5',
+        model: model ?? 'chat-cepat',
         messages,
         temperature,
         stream,
