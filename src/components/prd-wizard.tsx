@@ -324,52 +324,12 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
           model: settings.model,
           api_key: settings.apiKey,
           base_url: settings.baseUrl,
-          stream: true,
+          stream: false,
         }),
       });
-      if (!res.ok) {
-        const text = await res.text();
-        throw new Error(text || 'Generate failed');
-      }
-      if (!res.body) throw new Error('Generate stream tidak tersedia');
-
-      const reader = res.body.getReader();
-      const decoder = new TextDecoder();
-      let buffer = '';
-      let result: GeneratePrdData | undefined;
-
-      const readLine = (line: string) => {
-        if (!line.trim()) return;
-        const event = JSON.parse(line) as { type?: string; progress?: number; message?: string; detail?: string; data?: GeneratePrdData };
-        if (event.type === 'log') {
-          if (typeof event.progress === 'number') setProgress((prev) => Math.max(prev, event.progress ?? prev));
-          if (event.message) {
-            setStatus(event.message);
-            setGenerateLogs((prev) => [...prev, {
-              message: event.message ?? '',
-              detail: event.detail,
-              time: new Date().toLocaleTimeString('id-ID', { hour: '2-digit', minute: '2-digit', second: '2-digit' }),
-            }].slice(-12));
-          }
-        }
-        if (event.type === 'error') throw new Error(event.message || 'Generate failed');
-        if (event.type === 'done') {
-          result = event.data;
-          setProgress(100);
-          setStatus('PRD generated');
-        }
-      };
-
-      while (true) {
-        const { value, done } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() ?? '';
-        for (const line of lines) readLine(line);
-      }
-      if (buffer.trim()) readLine(buffer);
-      const data = result;
+      const json = await res.json();
+      if (!json.success) throw new Error(json.error?.message || 'Generate failed');
+      const data = json.data as GeneratePrdData;
       if (!data) throw new Error('Generate selesai tanpa hasil PRD');
 
       setPrdText(data.prd_text ?? '');
