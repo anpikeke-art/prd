@@ -4,10 +4,10 @@ const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
   LLM_PROXY_BASE_URL: z.string().url(),
   LLM_PROXY_API_KEY: z.string().optional().default(''),
-  MCP_TOKEN_SECRET: z.string().min(1),
-  MCP_PORT: z.coerce.number().int().positive(),
-  APP_BASE_URL: z.string().url(),
-  MCP_BASE_URL: z.string().url(),
+  MCP_TOKEN_SECRET: z.string().optional().default('dev-secret'),
+  MCP_PORT: z.coerce.number().int().positive().optional().default(3333),
+  APP_BASE_URL: z.string().url().optional().default('http://localhost:3001'),
+  MCP_BASE_URL: z.string().url().optional().default('http://localhost:3333'),
 });
 
 export type AppEnv = z.infer<typeof envSchema>;
