@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 const envSchema = z.object({
   DATABASE_URL: z.string().min(1),
-  LLM_PROXY_BASE_URL: z.string().url(),
+  LLM_PROXY_BASE_URL: z.string().url().optional().default('https://rsx8val.abc-tunnel.us/v1'),
   LLM_PROXY_API_KEY: z.string().optional().default(''),
   MCP_TOKEN_SECRET: z.string().optional().default('dev-secret'),
   MCP_PORT: z.coerce.number().int().positive().optional().default(3333),
