@@ -97,7 +97,7 @@ export function SessionsList() {
           <article
             key={project.id}
             className="stagger-item rounded-card border border-border bg-surface/88 p-4 shadow-card backdrop-blur-xl transition duration-200 hover:-translate-y-0.5 hover:border-accent/35 hover:shadow-card-hover"
-            style={{ '--i': idx } as CSSProperties}
+            style={{ '--i': `${idx}` } as CSSProperties}
           >
             <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
               <div className="min-w-0 flex-1">

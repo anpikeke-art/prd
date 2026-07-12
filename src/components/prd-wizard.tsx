@@ -534,7 +534,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                   ['Pertanyaan', 'Hanya hal yang berdampak ke scope.'],
                   ['PRD + Task', 'Output siap untuk agent.'],
                 ].map(([name, desc], idx) => (
-                  <div key={name} className="stagger-item rounded-card border border-border bg-surface/74 p-4 shadow-card backdrop-blur-xl" style={{ '--i': idx } as CSSProperties}>
+                  <div key={name} className="stagger-item rounded-card border border-border bg-surface/74 p-4 shadow-card backdrop-blur-xl" style={{ '--i': `${idx + 1}` } as CSSProperties}>
                     <div className="mb-3 size-2 rounded-full bg-accent" />
                     <p className="text-sm font-semibold text-primary">{name}</p>
                     <p className="mt-1 text-xs leading-relaxed text-secondary">{desc}</p>
@@ -571,7 +571,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                   </div>
                   <div className="stagger-container grid gap-5 md:grid-cols-2">
                     {questions.map((q, idx) => (
-                      <div key={q.id} className="stagger-item space-y-3 rounded-card border border-border bg-surface-alt/80 p-4 transition hover:-translate-y-0.5 hover:border-accent/35 hover:bg-surface" style={{ '--i': idx } as CSSProperties}>
+                        <div key={q.id} className="stagger-item space-y-3 rounded-card border border-border bg-surface-alt/80 p-4 transition hover:-translate-y-0.5 hover:border-accent/35 hover:bg-surface" style={{ '--i': `${idx}` } as CSSProperties}>
                         <p className="text-sm font-medium leading-snug text-primary">{q.question}</p>
                         <input
                           className="min-h-11 w-full rounded-input border border-border bg-surface px-4 py-2.5 text-base text-primary placeholder:text-muted transition-colors focus:outline-none focus:ring-2 focus:ring-accent/25"
