@@ -312,7 +312,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     setStatus('Mengirim data klarifikasi & tech stack…');
     try {
       setProgress(25);
-      setStatus('AI sedang menulis PRD dalam format Markdown…');
+      setStatus('Menghubungi server…');
       const settings = getLlmSettings();
       const res = await fetch(`/api/projects/${projectId}/generate-prd`, {
         method: 'POST',
@@ -324,12 +324,52 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
           model: settings.model,
           api_key: settings.apiKey,
           base_url: settings.baseUrl,
-          stream: false,
+          stream: true,
         }),
       });
-      const json = await res.json();
-      if (!json.success) throw new Error(json.error?.message || 'Generate failed');
-      const data = json.data as GeneratePrdData;
+      if (!res.ok) throw new Error(`Server responded ${res.status}`);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('Stream empty body');
+      const decoder = new TextDecoder();
+
+      let data: GeneratePrdData | null = null;
+      let buffer = '';
+
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() ?? '';
+
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const event = JSON.parse(line);
+            setGenerateLogs(prev => {
+              const last = prev[prev.length - 1];
+              if (last && last.message === event.message && last.detail === event.detail) return prev;
+              return [...prev, { message: event.message, detail: event.detail, time: new Date().toLocaleTimeString() }];
+            });
+
+            if (event.progress) setProgress(Math.min(event.progress, 99));
+            if (event.status) setStatus(event.status);
+            else if (event.message) setStatus(event.message);
+
+            if (event.type === 'done' && event.data) {
+              data = event.data as GeneratePrdData;
+            }
+            if (event.type === 'error') {
+              throw new Error(event.message || 'Generate failed');
+            }
+          } catch (parseErr) {
+            if (parseErr instanceof Error && parseErr.message !== 'Generate failed') continue;
+            throw parseErr;
+          }
+        }
+      }
+
       if (!data) throw new Error('Generate selesai tanpa hasil PRD');
 
       setPrdText(data.prd_text ?? '');

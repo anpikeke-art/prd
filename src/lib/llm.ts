@@ -9,6 +9,7 @@ export type ChatCompletionOptions = {
   messages: ChatMessage[];
   stream?: boolean;
   temperature?: number;
+  max_tokens?: number;
   signal?: AbortSignal;
   model?: string;
   apiKey?: string;
@@ -62,6 +63,7 @@ export async function chatCompletion({ messages, stream = false, temperature = 0
         messages,
         temperature,
         stream,
+        max_tokens,
       }),
       signal,
     });

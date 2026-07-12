@@ -4,6 +4,7 @@ import { z } from 'zod';
 export type JsonCompletionOptions<T> = {
   messages: ChatMessage[];
   temperature?: number;
+  max_tokens?: number;
   schema?: z.ZodType<T>;
   correctionHint?: string;
   timeout?: number;
@@ -17,13 +18,13 @@ function safeParseJson(raw: string): unknown {
   return JSON.parse(block);
 }
 
-export async function chatJsonCompletion<T = unknown>({ messages, temperature = 0.2, schema, correctionHint, timeout, model, apiKey, baseUrl }: JsonCompletionOptions<T>): Promise<T> {
+export async function chatJsonCompletion<T = unknown>({ messages, temperature = 0.2, max_tokens, schema, correctionHint, timeout, model, apiKey, baseUrl }: JsonCompletionOptions<T>): Promise<T> {
   let lastError: unknown;
   let lastRaw = '';
   const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const payload = await chatCompletion({ messages, temperature, signal, model, apiKey, baseUrl });
+    const payload = await chatCompletion({ messages, temperature, max_tokens, signal, model, apiKey, baseUrl });
     const text = extractAssistantText(payload);
     const raw = text || JSON.stringify(payload);
     lastRaw = raw;

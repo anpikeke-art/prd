@@ -8,6 +8,8 @@ import { createProjectMcpToken, hashProjectMcpToken, endpointForProject } from '
 import { ActorType, TaskStatus } from '@prisma/client';
 import { z } from 'zod';
 
+export const maxDuration = 300;
+
 const bodySchema = z.object({
   clarification_log: z.any().optional(),
   tech_stack: z.any().optional(),
@@ -55,6 +57,7 @@ async function generateProjectPrd(projectId: string, project: NonNullable<Awaite
         { role: 'user', content: buildPrdUserContent({ title: project.title, idea: project.overview ?? '', category, clarificationLog: clarifyLog, techStack: techStackValue }) },
       ],
       temperature: 0.7,
+      max_tokens: 4096,
       signal,
       model: modelOverride,
       apiKey: apiKeyOverride,
@@ -78,6 +81,7 @@ async function generateProjectPrd(projectId: string, project: NonNullable<Awaite
         { role: 'user', content: buildFeatureExtractPrompt(prdText) },
       ],
       temperature: 0.2,
+      max_tokens: 4096,
       schema: featureExtractSchema,
       correctionHint: 'Return { "features": [...] } with title, description, acceptance_criteria, sub_features, tasks.',
       timeout: STEP_2_TIMEOUT,
@@ -209,8 +213,9 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
 
     return new Response(stream, {
       headers: {
-        'Content-Type': 'application/x-ndjson; charset=utf-8',
-        'Cache-Control': 'no-cache, no-transform',
+        'Content-Type': 'text/event-stream; charset=utf-8',
+        'Cache-Control': 'no-cache',
+        'Connection': 'keep-alive',
       },
     });
   }
