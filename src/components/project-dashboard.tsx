@@ -296,15 +296,9 @@ export function ProjectDashboard({ projectId }: Props) {
         </div>
       )}
 
-      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
-        <section className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h3 className="text-sm font-black text-primary">Agent activity</h3>
-              <p className="mt-1 text-xs leading-relaxed text-secondary">
-                Panel ini dipakai untuk memantau AI agent yang mengerjakan task lewat MCP secara realtime.
-              </p>
-            </div>
+      <div className="mx-auto max-w-3xl space-y-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface/88 p-4 shadow-card backdrop-blur-xl">
+          <div className="flex items-center gap-4">
             <div
               className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
                 monitorState === 'live'
@@ -316,83 +310,29 @@ export function ProjectDashboard({ projectId }: Props) {
             >
               {monitorState === 'live' ? 'Live' : monitorState === 'waiting' ? 'Waiting' : monitorState === 'connecting' ? 'Connecting' : 'Idle'}
             </div>
+            <div className="flex gap-4 text-xs text-muted">
+              <span>{stats.total} task</span>
+              <span>{stats.inProgress} in progress</span>
+            </div>
           </div>
 
           {monitorState === 'live' && mcp && (
-            <div className="mb-4 rounded-card border border-pastel-green bg-pastel-green/30 p-4">
-              <p className="mb-1 text-xs font-semibold text-pastel-green-text">MCP session</p>
-              <p className="break-all font-mono text-[11px] text-pastel-green-text/80">Endpoint: {mcp.endpoint}</p>
-              {mcp.last_agent && <p className="mt-1 text-[11px] text-pastel-green-text/80">Last agent: {mcp.last_agent}</p>}
-              {mcp.last_sync_at && <p className="mt-1 text-[11px] text-pastel-green-text/80">Last sync: {new Date(mcp.last_sync_at).toLocaleString('id-ID')}</p>}
+            <div className="flex items-center gap-3 text-[11px] text-pastel-green-text">
+              {mcp.last_agent && <span>Agent: {mcp.last_agent}</span>}
+              {mcp.last_sync_at && <span>Sync: {new Date(mcp.last_sync_at).toLocaleString('id-ID')}</span>}
             </div>
           )}
+        </div>
 
-          <div className="grid gap-3 sm:grid-cols-3">
-            <div className="rounded-card border border-border bg-surface-alt p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Task total</p>
-              <p className="mt-1 text-2xl font-black text-primary">{stats.total}</p>
-            </div>
-            <div className="rounded-card border border-border bg-surface-alt p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">In progress</p>
-              <p className="mt-1 text-2xl font-black text-primary">{stats.inProgress}</p>
-            </div>
-            <div className="rounded-card border border-border bg-surface-alt p-4">
-              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Assigned to agent</p>
-              <p className="mt-1 text-2xl font-black text-primary">{stats.agentAssigned}</p>
-            </div>
+        <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
+          <div className="mb-4 flex items-center justify-between gap-3">
+            <h3 className="text-sm font-black text-primary">Task queue</h3>
+            <span className="rounded-full border border-border bg-surface-alt px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+              MCP focus
+            </span>
           </div>
-
-          <div className="mt-4 rounded-card border border-border bg-surface-alt p-4">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Latest activity</h4>
-              <span className="font-mono text-[10px] text-muted">{events.length} event(s)</span>
-            </div>
-            <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
-              {events.slice(0, 12).map((event) => {
-                const detailText = event.detail ? JSON.stringify(event.detail, null, 2) : '';
-                return (
-                <div key={event.id} className="rounded-input border border-border bg-surface px-3 py-3 transition hover:border-accent/35">
-                  <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="min-w-0">
-                      <p className="truncate text-sm font-semibold text-primary">{event.task_title}</p>
-                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">{event.event_type} · {event.actor}</p>
-                    </div>
-                    <span className="font-mono text-[10px] text-muted">{new Date(event.timestamp).toLocaleTimeString('id-ID')}</span>
-                  </div>
-                  {detailText && (
-                    <pre className="mt-2 overflow-auto rounded-input bg-surface-alt p-3 font-mono text-[10px] leading-relaxed text-secondary">
-                      {detailText}
-                    </pre>
-                  )}
-                </div>
-                );
-              })}
-              {events.length === 0 && <p className="py-6 text-center text-xs text-muted">Belum ada activity log. Connect MCP lalu jalankan agent.</p>}
-            </div>
-          </div>
-        </section>
-
-        <section className="space-y-4">
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <div className="mb-3 flex items-center justify-between gap-3">
-              <h3 className="text-sm font-black text-primary">Task queue</h3>
-              <span className="rounded-full border border-border bg-surface-alt px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
-                MCP focus
-              </span>
-            </div>
-            <TaskManager projectId={projectId} tasks={tasks as any} mcpConnected={Boolean(mcp)} onChanged={loadProject} />
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <h3 className="text-sm font-black text-primary">How this panel works</h3>
-            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-secondary">
-              <li>1. Click <span className="font-semibold text-primary">Connect MCP</span> to create a session.</li>
-              <li>2. Point your coding agent to the MCP endpoint.</li>
-              <li>3. Every task status change will stream into the activity list here.</li>
-              <li>4. Use this panel to watch which task the agent is actively touching.</li>
-            </ul>
-          </div>
-        </section>
+          <TaskManager projectId={projectId} tasks={tasks as any} mcpConnected={Boolean(mcp)} onChanged={loadProject} />
+        </div>
       </div>
     </div>
   );
