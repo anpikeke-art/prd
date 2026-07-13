@@ -2,6 +2,7 @@ import { prisma } from '@/lib/prisma';
 import { chatJsonCompletion } from '@/lib/llm-json';
 import { buildTechStackPrompt, type ManualTechStack } from '@/lib/prd-templates';
 import { z } from 'zod';
+import { requireOwnedProject } from '@/lib/route-guards';
 
 const bodySchema = z.object({
   mode: z.enum(['manual', 'ai']),
@@ -27,6 +28,8 @@ const aiStackSchema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const auth = await requireOwnedProject(projectId);
+  if ('error' in auth) return auth.error;
   const body = bodySchema.parse(await request.json());
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, { status: 404 });

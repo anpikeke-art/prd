@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { ActorType, TaskStatus } from '@prisma/client';
 import { z } from 'zod';
+import { requireSession } from '@/lib/route-guards';
 
 const patchSchema = z.object({
   title: z.string().min(1).optional(),
@@ -11,8 +12,15 @@ const patchSchema = z.object({
 
 export async function PATCH(request: Request, { params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await params;
+  const auth = await requireSession();
+  if ('error' in auth) return auth.error;
   const body = patchSchema.parse(await request.json());
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      sub_feature: { feature: { project: { owner_id: auth.session.user.id } } },
+    },
+  });
 
   if (!task) {
     return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } }, { status: 404 });
@@ -48,7 +56,14 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ ta
 
 export async function DELETE(_: Request, { params }: { params: Promise<{ taskId: string }> }) {
   const { taskId } = await params;
-  const task = await prisma.task.findUnique({ where: { id: taskId } });
+  const auth = await requireSession();
+  if ('error' in auth) return auth.error;
+  const task = await prisma.task.findFirst({
+    where: {
+      id: taskId,
+      sub_feature: { feature: { project: { owner_id: auth.session.user.id } } },
+    },
+  });
   if (!task) {
     return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Task not found' } }, { status: 404 });
   }

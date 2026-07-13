@@ -177,7 +177,7 @@ server.registerTool(
   async () => jsonContent({ success: true, data: { proposal_id: randomUUID(), status: 'proposed' } }),
 );
 
-const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: undefined });
+const transport = new StreamableHTTPServerTransport({ sessionIdGenerator: () => randomUUID() });
 await server.connect(transport);
 
 const httpServer = http.createServer(async (req, res) => {
@@ -197,13 +197,29 @@ const httpServer = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'GET') {
+    res.statusCode = 405;
+    res.setHeader('Content-Type', 'application/json');
+    res.end(JSON.stringify({ jsonrpc: '2.0', error: { code: -32000, message: 'GET not supported' }, id: null }));
+    return;
+  }
+
   const ua = (req.headers['user-agent'] ?? '').slice(0, 500);
   prisma.mCPConnection.updateMany({
     where: { project_id: projectId },
     data: { last_sync_at: new Date(), last_agent: ua || null },
   }).catch(() => {});
 
-  await transport.handleRequest(req, res);
+  try {
+    await transport.handleRequest(req, res);
+  } catch (error) {
+    console.error('MCP request error:', error);
+    if (!res.headersSent) {
+      res.statusCode = 500;
+      res.setHeader('Content-Type', 'text/plain; charset=UTF-8');
+    }
+    res.end(error instanceof Error ? error.message : 'Internal server error');
+  }
 });
 
 httpServer.listen(port, () => {

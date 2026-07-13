@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { requireSession } from '@/lib/route-guards';
 
 const bodySchema = z.object({
   baseUrl: z.string().url(),
@@ -7,6 +8,8 @@ const bodySchema = z.object({
 });
 
 export async function POST(request: Request) {
+  const auth = await requireSession();
+  if ('error' in auth) return auth.error;
   const body = bodySchema.parse(await request.json());
   const url = `${body.baseUrl.replace(/\/$/, '')}/chat/completions`;
 

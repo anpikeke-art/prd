@@ -1,4 +1,5 @@
 import type { ClarifyingQuestion, GeneratedFeature, ManualTechStack } from '@/lib/prd-templates';
+import { inferProjectTitle } from '@/lib/prd-title';
 
 function guessNoun(idea: string) {
   const words = idea.trim().split(/\s+/).filter(Boolean);
@@ -129,13 +130,14 @@ export function fallbackPrdMarkdown(input: {
   clarificationLog: unknown;
   techStack: unknown;
 }): string {
+  const title = inferProjectTitle(input.title, input.title);
   const stack = input.techStack as Partial<ManualTechStack> | null | undefined;
   const frontend = stack?.frontend ?? 'Next.js';
   const backend = stack?.backend ?? 'Next.js Route Handlers';
   const database = stack?.database ?? 'PostgreSQL';
   const realtime = stack?.realtime ?? 'SSE';
 
-  return `# ${input.title}
+  return `# ${title}
 
 > Dokumen ini adalah PRD awal yang dibuat secara otomatis. Setelah LLM proxy tersambung, regenerate untuk versi yang lebih detail dan akurat.
 
@@ -151,7 +153,7 @@ Aplikasi ini bertujuan untuk mewujudkan ide di atas menjadi produk digital yang 
 
 | Aspek | Detail |
 |-------|--------|
-| Nama Produk | ${input.title} |
+| Nama Produk | ${title} |
 | Status | Perencanaan |
 | Target Rilis MVP | Sesuai prioritas di bawah |
 
@@ -160,7 +162,7 @@ Aplikasi ini bertujuan untuk mewujudkan ide di atas menjadi produk digital yang 
 ## 2. Masalah yang Diselesaikan
 
 ### Masalah Utama
-Saat ini, ide "${input.title}" masih berupa konsep yang perlu dijabarkan menjadi spesifikasi teknis yang jelas dan terstruktur agar siap dikembangkan oleh tim engineering.
+Saat ini, ide "${title}" masih berupa konsep yang perlu dijabarkan menjadi spesifikasi teknis yang jelas dan terstruktur agar siap dikembangkan oleh tim engineering.
 
 ### Dampak
 - Ide tidak terdokumentasi dengan baik

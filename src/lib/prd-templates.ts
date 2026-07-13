@@ -166,13 +166,27 @@ ${JSON.stringify(clarificationLog ?? null, null, 2)}`;
 
 function formatClarify(log: unknown, maxQ?: number): string {
   if (!log || typeof log !== 'object') return '-';
-  const obj = log as { questions?: Array<{ id?: string; question?: string; answer?: string }>; answers?: Record<string, string> };
+  const obj = log as {
+    questions?: Array<{ id?: string; question?: string; answer?: string }>;
+    answers?: Record<string, string | string[] | { text?: string; selected?: string[] }>;
+  };
   if (!obj.questions) return '-';
   const qs = typeof maxQ === 'number' ? obj.questions.slice(0, maxQ) : obj.questions;
   const out = qs.map((q) => {
     const id = q.id ?? '';
-    const answer = obj.answers?.[id] ?? q.answer ?? '(belum dijawab)';
-    return `- ${q.question ?? ''}\n  Jawaban: ${answer}`;
+    const answer = obj.answers?.[id];
+    let answerText = q.answer ?? '(belum dijawab)';
+    if (Array.isArray(answer)) {
+      answerText = answer.length ? answer.join(', ') : '(belum dijawab)';
+    } else if (answer && typeof answer === 'object') {
+      const selected = Array.isArray(answer.selected) ? answer.selected : [];
+      const text = typeof answer.text === 'string' ? answer.text.trim() : '';
+      const parts = [selected.length ? selected.join(', ') : '', text].filter(Boolean);
+      answerText = parts.length ? parts.join(' | ') : '(belum dijawab)';
+    } else if (typeof answer === 'string' && answer.trim()) {
+      answerText = answer.trim();
+    }
+    return `- ${q.question ?? ''}\n  Jawaban: ${answerText}`;
   }).join('\n');
   if (typeof maxQ === 'number' && obj.questions.length > maxQ) {
     return out + `\n... dan ${obj.questions.length - maxQ} pertanyaan lainnya (diringkas)`;
@@ -188,26 +202,35 @@ Input yang kamu terima:
 - Kategori produk hasil klasifikasi
 - Jawaban user atas clarifying questions
 
-Aturan penting:
-1. Setiap jawaban dari clarifying questions HARUS termanifestasi eksplisit di section yang relevan — jangan cuma jadi konteks yang diserap bebas.
-2. Jangan skip section apa pun di struktur wajib di bawah, walau ide user simpel. Kalau info tidak cukup untuk satu bagian, isi dengan asumsi masuk akal dan tandai jelas sebagai "Asumsi: ...".
-3. Functional requirements harus dipecah per fitur/modul, bukan paragraf umum, dan tiap requirement penting punya acceptance criteria.
-4. Wajib ada Non-Goals — sebutkan eksplisit apa yang TIDAK dikerjakan di versi ini, supaya scope jelas.
-5. Wajib ada Edge Cases & Error Handling — jangan cuma happy path.
+PRINSIP OUTPUT:
+1. Utamakan spesifikasi yang bisa dieksekusi, bukan narasi panjang. Gunakan bullet, tabel, daftar status, dan requirement terstruktur.
+2. Hindari paragraf marketing / pengantar panjang. Setiap section cukup ringkas tapi padat.
+3. Jangan mengulang ide yang sama di banyak section tanpa nilai tambah. Ringkas di section awal, detailkan di section requirement.
+4. Jika sebuah detail sudah jelas dari input, tulis eksplisit sebagai keputusan. Jangan simpan sebagai open question kalau sebenarnya sudah bisa disimpulkan.
+5. Jika info tidak cukup, isi dengan asumsi masuk akal dan tandai jelas sebagai "Asumsi: ...".
+6. Gunakan bahasa Indonesia yang tegas, spesifik, dan profesional. Hindari frasa kosong seperti "user-friendly", "mudah digunakan", atau "handle error dengan baik".
+7. Untuk domain produk yang spesifik, beri contoh dan state yang spesifik terhadap domain itu. Jangan umumkan terlalu lebar.
+8. Kalau ada proses/flow, jelaskan sebagai state atau langkah aksi yang jelas.
+9. Jika ada batasan akses, status, atau validasi, tulis eksplisit. Jangan tersirat.
+10. Bila terdapat tradeoff atau keputusan scope, pilih yang paling sederhana yang tetap konsisten dengan input.
+
+ATURAN INTI:
+1. Setiap jawaban dari clarifying questions HARUS termanifestasi eksplisit di section yang relevan, bukan cuma terserap sebagai konteks.
+2. Jangan skip section apa pun di struktur wajib di bawah, walau ide user simpel.
+3. Functional requirements harus dipecah per fitur/modul, bukan paragraf umum, dan tiap requirement penting wajib punya acceptance criteria.
+4. Wajib ada Non-Goals yang benar-benar membatasi scope, bukan daftar generik.
+5. Wajib ada Edge Cases & Error Handling yang spesifik ke domain produk.
 6. Prioritaskan fitur pakai label P0 (wajib MVP) / P1 (penting tapi bisa nyusul) / P2 (nice to have).
-7. Tulis dalam Bahasa Indonesia yang jelas dan profesional, hindari jargon kosong.
-8. Output dalam format Markdown dengan heading sesuai struktur di bawah.
-9. WAJIB: sebelum output final, lakukan audit konsistensi internal terhadap draft yang baru kamu buat sendiri. Cek 5 pola kontradiksi generik berikut di seluruh section:
+7. Output dalam Markdown dengan heading sesuai struktur di bawah.
+8. Sebelum output final, lakukan audit konsistensi internal terhadap draft yang baru kamu buat sendiri. Cek 5 pola kontradiksi generik berikut di seluruh section:
    a. Open question yang sudah ke-lock diam-diam — ada entri di "Asumsi & Open Questions" yang jawabannya sebenarnya sudah diasumsikan atau ditentukan oleh requirement/skema data di section lain. Kalau ketemu: pindahkan ke Assumptions dengan penjelasan eksplisit, jangan biarkan tetap tercatat sebagai open question.
    b. Deskripsi domain vs granularitas data model — cara entitas utama dimodelkan tidak konsisten dengan bagaimana entitas itu dideskripsikan di Ringkasan/Latar Belakang atau User Stories.
    c. Non-Goal yang sebenarnya dibutuhkan P0 — ada item di Non-Goals yang ternyata diperlukan supaya salah satu Functional Requirement berlabel P0 bisa berjalan.
    d. Success Metric yang tidak terukur — ada metrik yang butuh data/field yang tidak pernah didefinisikan untuk dicatat di Functional Requirements manapun.
    e. Requirement yang melanggar batasan akses — ada Functional Requirement yang bertentangan dengan batasan akses yang sudah didefinisikan di Persona/Target User.
-10. Jika audit menemukan salah satu pola di atas, jangan disembunyikan atau diam-diam diperbaiki tanpa jejak — tulis eksplisit di section 14 "Catatan Konsistensi", berisi daftar kontradiksi yang ditemukan beserta 2 opsi rekomendasi penyelesaian per item.
-11. Jika audit tidak menemukan kontradiksi, section 14 tetap harus ada dan berisi satu kalimat konfirmasi bahwa audit sudah dilakukan dan tidak ditemukan kontradiksi.
-12. Non-Goals paling sering dilewatkan model — ini harus benar-benar membatasi scope, bukan sekadar daftar generik.
-13. Edge cases harus spesifik ke domain produknya, bukan kalimat umum seperti "handle error dengan baik".
-14. Success metric harus terukur dengan angka, rasio, SLA, atau threshold yang jelas.
+9. Untuk section yang panjang, gunakan subheading atau tabel agar mudah dipindai.
+10. Jangan terlalu banyak prose di section 1, 2, 3, 10, 11, dan 12. Yang paling penting adalah keputusan dan struktur, bukan cerita.
+11. Jika ada keputusan final dari section 12/14, konsistenkan semua section lain dengan keputusan itu.
 
 Struktur wajib PRD:
 
@@ -266,10 +289,13 @@ export function buildFeatureExtractPrompt(prdMarkdown: string) {
 
 1. **Prioritas** — Baca section "Milestone / Prioritas Rilis" (biasanya section 13). Assign P0/P1/P2 ke setiap fitur sesuai milestone tersebut. Jangan tebak sendiri.
 2. **Non-Goals** — Baca section "Non-Goals". Fitur yang tercantum di Non-Goals JANGAN diekstrak, kecuali secara eksplisit disebut sebagai P1/P2 di milestone.
-3. **Acceptance Criteria** — Ambil dari User Stories (section 6) atau langsung dari deskripsi modul. Setiap fitur minimal 3 acceptance criteria.
-4. **Tasks** — Tiap task harus deskriptif dan actionable. Jangan "Buat form" saja, tapi "Buat form input dengan validasi field wajib (judul, deadline, status)".
+3. **Acceptance Criteria** — Ambil dari User Stories (section 6) atau langsung dari deskripsi modul. Setiap fitur minimal 3 acceptance criteria yang spesifik dan terukur.
+4. **Tasks** — Tiap task harus deskriptif, actionable, dan domain-specific. Jangan "Buat form" saja; tulis apa yang divalidasi, state apa yang berubah, dan siapa yang boleh melakukan aksi.
 5. **Tech stack** — Baca section "Dependencies & Constraints" untuk referensi teknologi.
 6. **Catatan Konsistensi** — Jangan ekstrak item di section 14 sebagai fitur. Section itu hanya audit/opsi perbaikan, bukan scope implementasi.
+7. **Kepadatan output** — Pilih fitur yang benar-benar penting untuk eksekusi. Hindari memecah feature tree jadi terlalu banyak item generik.
+8. **Kualitas task** — Task harus membuat engineer tahu apa yang harus dibangun tanpa membaca PRD penuh berulang kali.
+9. **Jangan generik** — Hindari feature title seperti "Manajemen Data" kalau bisa dipecah jadi domain nyata (misal "Manajemen Aset", "Peminjaman", "Pengembalian", "Notifikasi").
 
 Output JSON:
 {

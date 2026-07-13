@@ -1,8 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { endpointForProject } from '@/lib/mcp-token';
+import { requireOwnedProject } from '@/lib/route-guards';
 
 export async function GET(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const auth = await requireOwnedProject(projectId);
+  if ('error' in auth) return auth.error;
   const conn = await prisma.mCPConnection.findFirst({ where: { project_id: projectId }, orderBy: { created_at: 'desc' } });
   if (!conn) return Response.json({ success: true, data: null });
   return Response.json({

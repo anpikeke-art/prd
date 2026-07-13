@@ -1,6 +1,6 @@
 'use client';
 
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 type Task = {
   id: string;
@@ -15,26 +15,30 @@ type Task = {
 type Props = {
   projectId: string;
   tasks: Task[];
+  mcpConnected?: boolean;
   onChanged?: () => void;
 };
 
 const STATUS_LABEL: Record<string, string> = { todo: 'Todo', in_progress: 'In progress', done: 'Done' };
 
+const STATUS_STYLES: Record<string, string> = {
+  todo: 'border-pastel-blue-bg bg-pastel-blue-bg/70 text-pastel-blue-text',
+  in_progress: 'border-pastel-yellow-bg bg-pastel-yellow-bg/70 text-pastel-yellow-text',
+  done: 'border-pastel-green-bg bg-pastel-green-bg/70 text-pastel-green-text',
+};
+
 function StatusTag({ status }: { status: string }) {
-  const colors: Record<string, string> = {
-    todo: 'border-pastel-yellow-bg bg-pastel-yellow-bg text-pastel-yellow-text',
-    in_progress: 'border-pastel-blue-bg bg-pastel-blue-bg text-pastel-blue-text',
-    done: 'border-pastel-green-bg bg-pastel-green-bg text-pastel-green-text',
-  };
-  return <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${colors[status] || ''}`}>{STATUS_LABEL[status] || status}</span>;
+  return <span className={`rounded-full border px-2 py-0.5 font-mono text-[10px] uppercase tracking-wider ${STATUS_STYLES[status] || ''}`}>{STATUS_LABEL[status] || status}</span>;
 }
 
-export function TaskManager({ projectId, tasks, onChanged }: Props) {
+export function TaskManager({ projectId, tasks, mcpConnected = false, onChanged }: Props) {
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [visibleCount, setVisibleCount] = useState(12);
+  const taskRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const previousStatusRef = useRef<Record<string, Task['status']>>({});
 
   const stats = useMemo(() => {
     const total = tasks.length;
@@ -44,6 +48,22 @@ export function TaskManager({ projectId, tasks, onChanged }: Props) {
 
   const visibleTasks = tasks.slice(0, visibleCount);
   const hiddenCount = Math.max(tasks.length - visibleTasks.length, 0);
+
+  useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    const newlyDoneTask = tasks.find((task) => task.status === 'done' && previousStatus[task.id] !== 'done');
+    previousStatusRef.current = Object.fromEntries(tasks.map((task) => [task.id, task.status]));
+
+    if (!newlyDoneTask) return;
+
+    const taskIndex = tasks.findIndex((task) => task.id === newlyDoneTask.id);
+    if (taskIndex >= 0) {
+      setVisibleCount((count) => Math.max(count, taskIndex + 1, 12));
+      requestAnimationFrame(() => {
+        taskRefs.current[newlyDoneTask.id]?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      });
+    }
+  }, [tasks]);
 
   async function createTask() {
     if (!title.trim()) return;
@@ -144,7 +164,13 @@ export function TaskManager({ projectId, tasks, onChanged }: Props) {
       {/* Task list */}
       <div className="mt-4 space-y-2">
         {visibleTasks.map((task) => (
-          <div key={task.id} className="rounded-input border border-border bg-surface-alt p-3 transition duration-200 hover:-translate-y-0.5 hover:border-accent/35 hover:bg-surface">
+          <div
+            key={task.id}
+            ref={(node) => {
+              taskRefs.current[task.id] = node;
+            }}
+            className={`rounded-input border p-3 transition duration-200 hover:-translate-y-0.5 hover:shadow-card-hover ${STATUS_STYLES[task.status] || 'border-border bg-surface-alt text-primary'}`}
+          >
             <div className="flex flex-wrap items-start justify-between gap-2">
               <div className="min-w-0 flex-1">
                 <div className="flex items-center gap-2">
@@ -160,7 +186,7 @@ export function TaskManager({ projectId, tasks, onChanged }: Props) {
                 <button
                   key={s}
                   type="button"
-                  disabled={busy || task.status === s}
+                  disabled={busy || mcpConnected || task.status === s}
                   onClick={() => updateTask(task, s)}
                   className={`rounded-input px-2.5 py-1 text-[11px] font-semibold transition-colors disabled:opacity-30
                     ${task.status === s
@@ -170,6 +196,7 @@ export function TaskManager({ projectId, tasks, onChanged }: Props) {
                   {STATUS_LABEL[s]}
                 </button>
               ))}
+              {mcpConnected && <span className="self-center rounded-full border border-border bg-surface px-2 py-1 text-[10px] font-medium text-muted">Locked by MCP</span>}
               <button
                 type="button"
                 disabled={busy}

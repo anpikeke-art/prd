@@ -13,7 +13,7 @@ export function AppHeader() {
         <div className="mx-auto flex max-w-7xl items-center justify-between px-6 py-3">
           <div className="flex items-center gap-3">
             <span className="flex size-9 items-center justify-center rounded-card color-band text-sm font-black text-primary shadow-card">P</span>
-            <span className="text-lg font-black leading-none tracking-tight text-primary">PRD Studio</span>
+            <span className="text-lg font-black leading-none tracking-tight text-primary">RakitPRD</span>
             <span className="rounded-full border border-border bg-surface/70 px-2.5 py-0.5 font-mono text-[10px] uppercase tracking-widest text-secondary">v0.1</span>
           </div>
           <div className="flex items-center gap-2">

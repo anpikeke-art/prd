@@ -3,6 +3,7 @@ import { chatJsonCompletion } from '@/lib/llm-json';
 import { buildClarifySystemPrompt, buildClarifyUserContent } from '@/lib/prd-templates';
 import { fallbackClarifyQuestions } from '@/lib/prd-fallback';
 import { z } from 'zod';
+import { requireOwnedProject } from '@/lib/route-guards';
 
 const bodySchema = z.object({
   idea: z.string().min(1),
@@ -26,12 +27,15 @@ const clarifyResponseSchema = z.object({
 
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const auth = await requireOwnedProject(projectId);
+  if ('error' in auth) return auth.error;
   const body = bodySchema.parse(await request.json());
   const project = await prisma.project.findUnique({ where: { id: projectId } });
   if (!project) return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, { status: 404 });
 
   const ideaWordCount = body.idea.trim().split(/\s+/).filter(Boolean).length;
   const useFallback = ideaWordCount < 10 || body.idea.trim().length < 40;
+  let sourceMode: 'ai' | 'fallback' = useFallback ? 'fallback' : 'ai';
 
   let result: { category?: string; secondary_category?: string | null; reasoning?: string; questions: z.infer<typeof questionSchema>[] };
 
@@ -50,6 +54,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       });
       result = raw;
     } catch {
+      sourceMode = 'fallback';
       result = fallbackClarifyQuestions(body.idea);
     }
   }
@@ -62,7 +67,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
         idea: body.idea,
         questions: result.questions,
         category: result.category,
-        mode: useFallback ? 'fallback' : 'ai',
+        mode: sourceMode,
       },
     },
   });
@@ -74,7 +79,7 @@ export async function POST(request: Request, { params }: { params: Promise<{ pro
       secondary_category: result.secondary_category,
       reasoning: result.reasoning,
       questions: result.questions,
-      mode: useFallback ? 'fallback' : 'ai',
+      mode: sourceMode,
     },
   });
 }

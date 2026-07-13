@@ -1,7 +1,10 @@
 import { getEnv } from '@/lib/env';
+import { requireOwnedProject } from '@/lib/route-guards';
 
 export async function POST(request: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
+  const auth = await requireOwnedProject(projectId);
+  if ('error' in auth) return auth.error;
   const env = getEnv();
   const body = await request.json();
 

@@ -42,14 +42,18 @@ function normalizeErrorBody(body: unknown): string {
   return 'LLM proxy error';
 }
 
-export async function chatCompletion({ messages, stream = false, temperature = 0.2, signal, model, apiKey, baseUrl }: ChatCompletionOptions) {
+export async function chatCompletion({ messages, stream = false, temperature = 0.2, max_tokens, signal, model, apiKey, baseUrl }: ChatCompletionOptions) {
   const env = getEnv();
   const proxyBaseUrl = baseUrl || env.LLM_PROXY_BASE_URL;
   if (!proxyBaseUrl) {
     throw new Error('LLM_PROXY_BASE_URL missing');
   }
 
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+    'User-Agent': 'Mozilla/5.0 (compatible; PRDStudio/1.0)',
+    'Accept': 'application/json',
+  };
   const key = apiKey || env.LLM_PROXY_API_KEY;
   if (key) headers.Authorization = `Bearer ${key}`;
 

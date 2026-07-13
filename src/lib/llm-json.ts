@@ -18,13 +18,30 @@ function safeParseJson(raw: string): unknown {
   return JSON.parse(block);
 }
 
+function isRetryableCompletionError(message: string): boolean {
+  return /fetch failed/i.test(message)
+    || /timeout/i.test(message)
+    || /aborted/i.test(message)
+    || /AbortError/i.test(message);
+}
+
 export async function chatJsonCompletion<T = unknown>({ messages, temperature = 0.2, max_tokens, schema, correctionHint, timeout, model, apiKey, baseUrl }: JsonCompletionOptions<T>): Promise<T> {
   let lastError: unknown;
   let lastRaw = '';
-  const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
 
   for (let attempt = 0; attempt < 2; attempt += 1) {
-    const payload = await chatCompletion({ messages, temperature, max_tokens, signal, model, apiKey, baseUrl });
+    const signal = timeout ? AbortSignal.timeout(timeout) : undefined;
+    let payload;
+    try {
+      payload = await chatCompletion({ messages, temperature, max_tokens, signal, model, apiKey, baseUrl });
+    } catch (error) {
+      lastError = error;
+      const message = error instanceof Error ? error.message : String(error);
+      if (attempt === 0 && isRetryableCompletionError(message)) {
+        continue;
+      }
+      throw error;
+    }
     const text = extractAssistantText(payload);
     const raw = text || JSON.stringify(payload);
     lastRaw = raw;

@@ -25,7 +25,7 @@ const mono = JetBrains_Mono({
 });
 
 export const metadata: Metadata = {
-  title: 'PRD Studio',
+  title: 'RakitPRD',
   description: 'Dari ide ke PRD terstruktur + task tree sinkron real-time.',
 };
 

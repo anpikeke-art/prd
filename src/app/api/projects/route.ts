@@ -1,6 +1,7 @@
 import { prisma } from '@/lib/prisma';
 import { z } from 'zod';
 import { getAuthSession } from '@/auth';
+import { inferProjectTitle } from '@/lib/prd-title';
 
 const listQuerySchema = z.object({
   cursor: z.string().optional(),
@@ -47,10 +48,13 @@ export async function POST(request: Request) {
   if (!session) return Response.json({ success: false, error: { code: 'UNAUTHORIZED', message: 'Not logged in' } }, { status: 401 });
 
   const body = bodySchema.parse(await request.json());
+  const normalizedTitle = body.title.length > 40 || /\b(?:merupakan|adalah|ialah|yakni)\b/i.test(body.title)
+    ? inferProjectTitle(body.title, body.title)
+    : body.title;
 
   const project = await prisma.project.create({
     data: {
-      title: body.title,
+      title: normalizedTitle,
       overview: body.idea,
       owner_id: session.user.id,
       clarification_log: {

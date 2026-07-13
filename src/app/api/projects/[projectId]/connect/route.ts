@@ -1,10 +1,11 @@
 import { prisma } from '@/lib/prisma';
 import { createProjectMcpToken, hashProjectMcpToken, endpointForProject } from '@/lib/mcp-token';
+import { requireOwnedProject } from '@/lib/route-guards';
 
 export async function POST(_: Request, { params }: { params: Promise<{ projectId: string }> }) {
   const { projectId } = await params;
-  const project = await prisma.project.findUnique({ where: { id: projectId } });
-  if (!project) return Response.json({ success: false, error: { code: 'NOT_FOUND', message: 'Project not found' } }, { status: 404 });
+  const auth = await requireOwnedProject(projectId);
+  if ('error' in auth) return auth.error;
 
   const token = createProjectMcpToken();
   const tokenHash = hashProjectMcpToken(token);

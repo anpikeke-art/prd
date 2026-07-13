@@ -9,6 +9,7 @@ import { ThemeToggle } from '@/components/theme-toggle';
 import { LlmSettings } from '@/components/llm-settings';
 import { SignOutButton } from '@/components/sign-out-button';
 import { getLlmSettings } from '@/lib/llm-settings';
+import { inferProjectTitle } from '@/lib/prd-title';
 
 const STEPS = [
   { id: 'ide', label: 'Idea' },
@@ -18,6 +19,7 @@ const STEPS = [
 
 type StepId = (typeof STEPS)[number]['id'];
 type GenerateLogEntry = { message: string; detail?: string; time: string };
+type ClarifyAnswerValue = { text: string; selected: string[] };
 type GeneratePrdData = {
   prd_text?: string;
   llm_error?: string;
@@ -26,6 +28,7 @@ type GeneratePrdData = {
 
 const MIN_CHARS = 20;
 const MAX_CHARS = 2000;
+const GENERATE_TIMEOUT_MS = 900_000;
 
 function toSafeFilename(input: string) {
   return input
@@ -35,6 +38,71 @@ function toSafeFilename(input: string) {
     .replace(/\s+/g, '_')
     .replace(/_+/g, '_')
     .toLowerCase() || 'prd_document';
+}
+
+function fallbackReasonLabel(error: string) {
+  return /timeout|aborted/i.test(error) ? 'LLM proxy terlalu lama merespons' : 'koneksi ke LLM proxy gagal';
+}
+
+function buildAgentInstruction(title: string, stack: unknown, prdText: string, mcpEndpoint?: string | null, mcpToken?: string | null) {
+  const techStackText = (() => {
+    try {
+      return JSON.stringify(stack ?? {}, null, 2);
+    } catch {
+      return 'Lihat PRD';
+    }
+  })();
+
+  return `Kamu adalah AI engineer. Implementasikan aplikasi ini 100% sesuai PRD di bawah. Jangan menebak, jangan menyederhanakan scope secara sepihak, dan jangan menambahkan fitur di luar PRD.
+
+PROJECT: ${title}
+TECH STACK: ${techStackText}
+
+SKILL WAJIB SAAT KERJA FRONTEND/UX:
+1. Jika mengerjakan UI, layout, visual language, empty state, dashboard, atau halaman user-facing, wajib pakai prinsip dari skill \`taste-design\` dan \`frontend-design\`.
+2. Jika sedang memodernisasi halaman yang sudah ada, perlakukan ini sebagai redesign yang harus lebih intentional, tidak generik, dan tidak pakai layout template standar.
+3. Jangan membuat UI yang aman tapi generik. Pilih tipografi, spacing, hierarchy, dan CTA yang jelas dan konsisten dengan PRD.
+4. Untuk pekerjaan existing app, gunakan pola dari \`redesign-existing-projects\` agar hasilnya tetap nyambung dengan sistem yang sudah ada.
+
+ATURAN KERAS:
+1. Ikuti PRD sebagai source of truth. Jika ada konflik antara narasi umum dan keputusan final, ikuti keputusan final di section 12, 14, dan 15.
+2. Jangan meminta klarifikasi untuk hal yang sudah dikunci di PRD.
+3. Jangan menambah, menghapus, atau mengubah scope di luar PRD.
+4. Kalau ada detail teknis yang tidak disebut PRD, pilih solusi paling sederhana yang tetap konsisten dengan PRD.
+5. Pertahankan fitur yang sudah ada kalau sesuai PRD. Kalau ada mismatch, ubah supaya match PRD.
+6. Semua perubahan penting harus punya audit trail, validasi, dan permission check sesuai PRD.
+7. Gunakan model data hybrid sesuai PRD: aset \`unik\` per unit dan aset \`stok\` dengan jumlah stok.
+8. Satu transaksi peminjaman hanya untuk satu aset.
+9. Notifikasi MVP hanya in-app. Jangan implement WhatsApp/Telegram, QR/barcode, mobile app native, atau ERP/accounting di MVP.
+
+KEWAJIBAN UPDATE MCP:
+1. Setiap kali mulai mengerjakan task, ubah status task ke \`in_progress\`.
+2. Setiap kali selesai mengerjakan satu task atau subtask, ubah status task ke \`done\` dan sinkronkan lagi ke MCP sebelum lanjut ke task berikutnya.
+3. Kalau ada perubahan penting pada task, ringkasan hasil kerja, atau catatan implementasi, tulis ke log/metadata MCP yang tersedia supaya state task manager dan state agent tetap sama.
+4. Jangan menunggu semua pekerjaan selesai untuk sync. Sync dilakukan bertahap per task agar progress realtime terlihat.
+
+URUTAN KERJA WAJIB:
+1. Baca PRD dari atas ke bawah, lalu prioritaskan section 12, 14, dan 15.
+2. Kerjakan scope P0 dulu: auth/role access, aset, lokasi, pinjam, approval, pengambilan, pengembalian, stok, notifikasi in-app, audit log, dashboard dasar.
+3. Setelah P0 beres, baru kerjakan P1 yang memang ada di PRD.
+4. Jangan mulai P2 sebelum P0 dan P1 yang relevan benar-benar selesai.
+5. Kalau ada task yang sudah ada di codebase, adaptasi supaya sesuai PRD, bukan dibuang sembarang.
+
+CEK KELUARAN:
+- Admin bisa mengelola aset dan lokasi.
+- Staff bisa ajukan pinjam dan pengembalian.
+- Approval, pengambilan, dan pengembalian sesuai status transaksi di PRD.
+- Status aset berubah otomatis sesuai transaksi.
+- Audit log tercatat untuk perubahan penting.
+- Notifikasi stok menipis muncul in-app.
+- Laporan dan export sesuai format PRD.
+
+PRD MARKDOWN (source of truth):
+${prdText.slice(0, 8000)}${prdText.length > 8000 ? '\n... (truncated, lihat file untuk lengkap)' : ''}
+
+${mcpEndpoint ? `MCP ENDPOINT: ${mcpEndpoint}
+MCP TOKEN: ${mcpToken ?? '(lihat di web)'}
+Jika tersedia, gunakan MCP untuk membaca task terbaru dan update status kerja.` : ''}`;
 }
 
 const ProjectDashboard = dynamic(
@@ -127,7 +195,9 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
   const [projectId, setProjectId] = useState('');
   const [step, setStep] = useState<StepId>('ide');
   const [questions, setQuestions] = useState<Array<{ id: string; question: string; category: string; quick_replies: string[] }>>([]);
-  const [answers, setAnswers] = useState<Record<string, string>>({});
+  const [clarifyMode, setClarifyMode] = useState<'ai' | 'fallback' | ''>('');
+  const [clarifyReasoning, setClarifyReasoning] = useState('');
+  const [answers, setAnswers] = useState<Record<string, ClarifyAnswerValue>>({});
   const [manualStack] = useState({ frontend: 'Next.js', backend: 'Next.js Route Handlers', database: 'PostgreSQL', realtime: 'SSE', auth_ready: 'yes' });
   const [stack, setStack] = useState<unknown>(null);
   const [prdDone, setPrdDone] = useState(false);
@@ -144,17 +214,43 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
   const [busy, setBusy] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const [focused, setFocused] = useState(false);
+  const workspaceActionClass = 'inline-flex items-center justify-center rounded-input border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-secondary shadow-card transition hover:-translate-y-0.5 hover:border-accent/35 hover:text-primary active:scale-[0.98]';
+  const workspaceActions = (
+    <>
+      {projectId && (
+        <button type="button" onClick={resetProject} className={workspaceActionClass}>
+          New
+        </button>
+      )}
+      <a href="/sessions" className={workspaceActionClass}>
+        History
+      </a>
+      <button
+        type="button"
+        onClick={() => setShowSettings(true)}
+        className={workspaceActionClass}
+        aria-label="LLM settings"
+      >
+        Setting
+      </button>
+      <div className="flex items-center justify-between gap-3 rounded-input border border-border bg-surface/80 px-3 py-2 shadow-card">
+        <span className="text-xs font-semibold text-secondary">Darkmode</span>
+        <ThemeToggle />
+      </div>
+    </>
+  );
 
   useEffect(() => {
     const pathStep = window.location.pathname.replace(/^\//, '') as StepId;
     if (!STEPS.some(s => s.id === pathStep)) return;
     setStep(pathStep);
+    const urlProjectId = new URLSearchParams(window.location.search).get('projectId');
     if (pathStep === 'ide') {
       localStorage.removeItem('prd_project_id');
       localStorage.removeItem('prd_title');
       localStorage.removeItem('prd_idea');
     } else {
-      const pid = localStorage.getItem('prd_project_id');
+      const pid = urlProjectId || localStorage.getItem('prd_project_id');
       if (pid) {
         setProjectId(pid);
         setTitle(localStorage.getItem('prd_title') ?? '');
@@ -166,7 +262,8 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
   useEffect(() => {
     const currentPath = window.location.pathname.replace(/^\//, '');
     if (step !== currentPath && STEPS.some(s => s.id === step)) {
-      window.history.replaceState(null, '', `/${step}`);
+      const search = window.location.search;
+      window.history.replaceState(null, '', `/${step}${search}`);
     }
   }, [step]);
 
@@ -177,13 +274,6 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
       localStorage.setItem('prd_idea', idea);
     }
   }, [projectId, title, idea]);
-
-  useEffect(() => {
-    if (!projectId) return;
-    fetch(`/api/projects/${projectId}/mcp`).then(r => r.json()).then(j => {
-      if (j.success && j.data) setMcpInfo(j.data);
-    }).catch(() => {});
-  }, [projectId]);
 
   useEffect(() => {
     if (!projectId || prdDone || prdText) return;
@@ -207,6 +297,8 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     setPrdText('');
     setMcpInfo(null);
     setQuestions([]);
+    setClarifyMode('');
+    setClarifyReasoning('');
     setAnswers({});
     setStack(null);
     setStep('ide');
@@ -215,7 +307,19 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     window.history.replaceState(null, '', '/ide');
   }
 
-  const clarifiedContext = useMemo(() => questions.map((q) => `${q.question}: ${answers[q.id] ?? ''}`).join('\n'), [answers, questions]);
+  const clarifiedContext = useMemo(
+    () =>
+      questions
+        .map((q) => {
+          const answer = answers[q.id];
+          const selected = answer?.selected?.length ? `Pilihan: ${answer.selected.join(', ')}` : '';
+          const text = answer?.text.trim() ? `Jawaban: ${answer.text.trim()}` : '';
+          const combined = [selected, text].filter(Boolean).join(' | ');
+          return `${q.question}: ${combined || '(belum dijawab)'}`;
+        })
+        .join('\n'),
+    [answers, questions],
+  );
   const ideaLen = idea.length;
   const canSubmit = ideaLen >= MIN_CHARS && !busy;
 
@@ -225,7 +329,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     if (!canSubmit) return;
     const ideaBody = idea.trim();
     if (!ideaBody) return;
-    const finalTitle = title.trim() || ideaBody.slice(0, 60);
+    const finalTitle = title.trim() || inferProjectTitle(ideaBody);
     setBusy(true);
     setStatus('Creating project…');
     try {
@@ -257,7 +361,11 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
         body: JSON.stringify({ idea: ideaText, existingContext: '' }),
       });
       const json = await res.json();
-      if (res.ok && json.success) setQuestions(json.data.questions);
+      if (res.ok && json.success) {
+        setQuestions(json.data.questions);
+        setClarifyMode(json.data.mode ?? '');
+        setClarifyReasoning(json.data.reasoning ?? '');
+      }
     } catch { /* silent */ }
     setBusy(false);
   }
@@ -302,29 +410,58 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     setStep('generate');
   }
 
-  async function generatePrd() {
+  async function stepFetch(mode: string, extraBody: Record<string, unknown> = {}): Promise<Record<string, unknown>> {
+    const settings = getLlmSettings();
+    const res = await fetch(`/api/projects/${projectId}/generate-prd`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
+      body: JSON.stringify({
+        mode,
+        stream: false,
+        clarification_log: { questions, answers },
+        tech_stack: stack,
+        model: settings.model,
+        api_key: settings.apiKey,
+        base_url: settings.baseUrl,
+        ...extraBody,
+      }),
+    });
+    if (!res.ok) throw new Error(`Server responded ${res.status}`);
+    const json = await res.json();
+    if (!json.success) throw new Error(json?.error?.message ?? 'Generate failed');
+    return json.data;
+  }
+
+  async function generatePrd(options: { forceFresh?: boolean } = {}) {
     if (!projectId) return;
     setBusy(true);
     setError('');
     setLlmError('');
     setGenerateLogs([]);
-    setProgress(10);
-    setStatus('Mengirim data klarifikasi & tech stack…');
+    setProgress(options.forceFresh ? 2 : 5);
+    setStatus(options.forceFresh ? 'Fresh regenerate dimulai…' : 'Menghubungi LLM proxy…');
+    if (options.forceFresh) {
+      setPrdDone(false);
+      setPrdText('');
+      setViewTab('prd');
+    }
+
     try {
-      setProgress(25);
-      setStatus('Menghubungi server…');
       const settings = getLlmSettings();
       const res = await fetch(`/api/projects/${projectId}/generate-prd`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        signal: AbortSignal.timeout(720_000),
+        signal: AbortSignal.timeout(GENERATE_TIMEOUT_MS),
         body: JSON.stringify({
+          mode: 'full',
+          stream: true,
+          force_fresh: options.forceFresh ?? false,
           clarification_log: { questions, answers },
           tech_stack: stack,
           model: settings.model,
           api_key: settings.apiKey,
           base_url: settings.baseUrl,
-          stream: true,
         }),
       });
       if (!res.ok) throw new Error(`Server responded ${res.status}`);
@@ -335,45 +472,57 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
 
       let data: GeneratePrdData | null = null;
       let buffer = '';
+      let finished = false;
 
       while (true) {
         const { done, value } = await reader.read();
         if (done) break;
+
         buffer += decoder.decode(value, { stream: true });
         const lines = buffer.split('\n');
         buffer = lines.pop() ?? '';
 
         for (const line of lines) {
           if (!line.trim()) continue;
+          if (finished) continue;
+
+          let event: { type?: string; progress?: number; message?: string; detail?: string; data?: GeneratePrdData };
           try {
-            const event = JSON.parse(line);
-            setGenerateLogs(prev => {
-              const last = prev[prev.length - 1];
-              if (last && last.message === event.message && last.detail === event.detail) return prev;
-              return [...prev, { message: event.message, detail: event.detail, time: new Date().toLocaleTimeString() }];
+            event = JSON.parse(line);
+          } catch {
+            continue;
+          }
+
+          if (typeof event.progress === 'number') {
+            setProgress(Math.min(event.progress, 99));
+          }
+          if (event.message) {
+            setStatus(event.detail ? `${event.message}${event.detail ? ` · ${event.detail}` : ''}` : event.message);
+            setGenerateLogs((prev) => {
+              const next = [...prev];
+              const last = next[next.length - 1];
+              const entry = { message: event.message ?? '', detail: event.detail, time: new Date().toLocaleTimeString() };
+              if (last && last.message === entry.message && last.detail === entry.detail) return prev;
+              next.push(entry);
+              return next;
             });
+          }
 
-            if (event.progress) setProgress(Math.min(event.progress, 99));
-            if (event.status) setStatus(event.status);
-            else if (event.message) setStatus(event.message);
-
-            if (event.type === 'done' && event.data) {
-              data = event.data as GeneratePrdData;
-            }
-            if (event.type === 'error') {
-              throw new Error(event.message || 'Generate failed');
-            }
-          } catch (parseErr) {
-            if (parseErr instanceof Error && parseErr.message !== 'Generate failed') continue;
-            throw parseErr;
+          if (event.type === 'error') {
+            throw new Error(event.message || 'Generate failed');
+          }
+          if (event.type === 'done' && event.data) {
+            data = event.data as GeneratePrdData;
+            finished = true;
+            setProgress(100);
+            setStatus('PRD selesai, file sudah diunduh');
           }
         }
       }
 
       if (!data) throw new Error('Generate selesai tanpa hasil PRD');
-
+      if (data.llm_error) setLlmError(prev => prev || (data.llm_error as string));
       setPrdText(data.prd_text ?? '');
-      setLlmError(data.llm_error ?? '');
       setMcpInfo(data.mcp ?? null);
       const blob = new Blob([data.prd_text ?? ''], { type: 'text/markdown' });
       const url = URL.createObjectURL(blob);
@@ -383,9 +532,8 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
       a.click();
       URL.revokeObjectURL(url);
       await navigator.clipboard.writeText(JSON.stringify(data.mcp, null, 2)).catch(() => {});
-      setProgress(100);
       setPrdDone(true);
-      setStatus(data.llm_error ? 'PRD siap dengan catatan' : 'PRD generated');
+      setStatus('PRD selesai, file sudah diunduh');
       setStep('generate');
     } catch (error) {
       const msg = error instanceof Error ? error.message : 'Generate failed';
@@ -401,78 +549,43 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
     <div className="app-shell flex min-h-dvh flex-col">
       {/* Header */}
       <header className="sticky top-0 z-40 w-full border-b border-border bg-surface/76 backdrop-blur-xl">
-        <div className="mx-auto flex min-h-16 max-w-7xl items-center justify-between gap-3 px-4 py-2 sm:px-6">
+        <div className="mx-auto grid min-h-16 max-w-7xl grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-3 px-4 py-2 sm:px-6">
           <div className="flex items-center gap-3">
             <span className="flex size-9 items-center justify-center rounded-card color-band text-sm font-black text-primary shadow-card">P</span>
-            <span className="hidden text-base font-black tracking-tight text-primary sm:block">PRD Studio</span>
-            {mcpInfo && (
-              <span className="hidden items-center gap-1.5 rounded-full border border-pastel-green bg-pastel-green/60 px-2.5 py-1 text-[10px] font-semibold text-pastel-green-text sm:flex">
-                <span className="size-1.5 rounded-full bg-pastel-green-text" />
-                MCP Connected
-              </span>
-            )}
+            <span className="hidden text-base font-black tracking-tight text-primary sm:block">RakitPRD</span>
           </div>
-          <div className="absolute left-1/2 hidden -translate-x-1/2 sm:block">
+          <div className="min-w-0 justify-self-center hidden sm:block">
             <JourneySteps active={step} stepIndex={stepIndex} />
           </div>
-          <div className="flex items-center gap-2">
-            {projectId && (
-              <button
-                type="button"
-                onClick={resetProject}
-                className="rounded-input border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-secondary shadow-card transition hover:-translate-y-0.5 hover:border-accent/35 hover:text-primary active:scale-[0.98]"
-              >
-                New
-              </button>
-            )}
-            <a href="/sessions" className="rounded-input border border-border bg-surface/80 px-3 py-2 text-xs font-semibold text-secondary shadow-card transition hover:-translate-y-0.5 hover:border-accent/35 hover:text-primary active:scale-[0.98]">
-              History
-            </a>
+          <div className="flex min-w-0 items-center justify-end gap-2">
             <SignOutButton compact />
-            <button
-              type="button"
-              onClick={() => setShowSettings(true)}
-              className="flex size-9 items-center justify-center rounded-input border border-border bg-surface/80 text-secondary shadow-card transition hover:-translate-y-0.5 hover:border-accent/35 hover:text-primary active:scale-[0.98]"
-              aria-label="LLM settings"
-            >
-              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <circle cx="12" cy="12" r="3" />
-                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z" />
-              </svg>
-            </button>
-            <ThemeToggle />
           </div>
         </div>
       </header>
 
-
-
-      {/* MCP persistent card */}
-      {mcpInfo && (
-        <div className="border-b border-pastel-green bg-pastel-green/35 px-4 py-2.5 backdrop-blur-xl">
-          <div className="mx-auto flex max-w-6xl items-center justify-between gap-4">
-            <div className="flex items-center gap-3 overflow-hidden">
-              <span className="flex size-2 shrink-0 rounded-full bg-pastel-green-text" />
-              <span className="whitespace-nowrap text-xs font-semibold text-pastel-green-text">MCP Connected</span>
-              <code className="truncate font-mono text-xs text-pastel-green-text/80">{mcpInfo.endpoint}</code>
-              {mcpInfo.last_agent && (
-                <span className="hidden truncate text-xs text-pastel-green-text/60 sm:block">{mcpInfo.last_agent}</span>
-              )}
-            </div>
-            <button
-              type="button"
-              onClick={() => navigator.clipboard.writeText(JSON.stringify({ endpoint: mcpInfo.endpoint, project_id: mcpInfo.project_id }, null, 2))}
-              className="shrink-0 rounded-input border border-pastel-green px-2.5 py-1 text-[10px] font-semibold text-pastel-green-text transition hover:bg-pastel-green/50 active:scale-[0.98]"
-            >
-              Copy
-            </button>
-          </div>
+      <div className="mx-auto w-full max-w-7xl px-4 pt-4 sm:px-6 xl:hidden">
+        <div className="flex flex-wrap items-center justify-end gap-2 rounded-card border border-border bg-surface/80 p-3 shadow-card backdrop-blur-xl">
+          {workspaceActions}
         </div>
-      )}
+      </div>
 
       {/* Main */}
-      <div className="flex min-h-0 flex-1 flex-col items-center overflow-y-auto px-4 sm:px-6">
-        <div className="my-auto w-full max-w-4xl space-y-8 py-8">
+      <div className="flex min-h-0 flex-1 flex-col overflow-y-auto px-4 sm:px-6">
+        <div className="mx-auto grid w-full max-w-7xl gap-6 py-8 xl:grid-cols-[15rem_minmax(0,1fr)]">
+          <aside className="sticky top-24 hidden h-fit xl:block">
+            <div className="space-y-3 rounded-card border border-border bg-surface/88 p-4 shadow-card backdrop-blur-xl">
+              <div>
+                <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.18em] text-muted">Workspace</p>
+                <h2 className="text-sm font-black tracking-tight text-primary">Project actions</h2>
+                <p className="mt-1 text-xs leading-relaxed text-secondary">Aksi cepat untuk start ulang atau buka riwayat project.</p>
+              </div>
+              <div className="flex flex-col gap-2">
+                {workspaceActions}
+              </div>
+            </div>
+          </aside>
+
+          <div className="min-w-0 space-y-8">
 
           {/* === STEP: IDEA === */}
           {step === 'ide' && (
@@ -486,7 +599,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                   Mau bikin apa?
                 </h1>
                 <p className="mx-auto max-w-xl text-base leading-relaxed text-secondary">
-                  Tulis ide mentahmu. PRD Studio akan bantu klasifikasi, tanya hal penting, lalu susun PRD yang siap dieksekusi.
+                  Tulis ide mentahmu. RakitPRD akan bantu klasifikasi, tanya hal penting, lalu susun PRD yang siap dieksekusi.
                 </p>
               </div>
 
@@ -565,28 +678,57 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                       <h3 className="text-xl font-black tracking-tight text-primary">Pertanyaan klarifikasi</h3>
                       <p className="mt-1 text-sm text-secondary">Isi yang kamu tahu. Yang belum yakin boleh dijawab singkat.</p>
                     </div>
-                    <span className="w-fit rounded-full border border-border bg-surface-alt px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
-                      {questions.length} item
-                    </span>
+                    <div className="flex w-fit items-center gap-2">
+                      <span className={`rounded-full px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] ${
+                        clarifyMode === 'ai'
+                          ? 'border border-pastel-green bg-pastel-green/60 text-pastel-green-text'
+                          : 'border border-pastel-red bg-pastel-red/70 text-pastel-red-text'
+                      }`}>
+                        {clarifyMode === 'ai' ? 'AI' : clarifyMode === 'fallback' ? 'Fallback' : 'Unknown'}
+                      </span>
+                      <span className="w-fit rounded-full border border-border bg-surface-alt px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+                        {questions.length} item
+                      </span>
+                    </div>
                   </div>
+                  {clarifyReasoning && (
+                    <div className="mb-4 rounded-input border border-border bg-surface-alt/70 px-4 py-3 text-xs leading-relaxed text-secondary">
+                      <span className="font-semibold text-primary">Sumber pertanyaan:</span> {clarifyReasoning}
+                    </div>
+                  )}
                   <div className="stagger-container grid gap-5 md:grid-cols-2">
                     {questions.map((q, idx) => (
                         <div key={q.id} className="stagger-item space-y-3 rounded-card border border-border bg-surface-alt/80 p-4 transition hover:-translate-y-0.5 hover:border-accent/35 hover:bg-surface" style={{ '--i': `${idx}` } as CSSProperties}>
                         <p className="text-sm font-medium leading-snug text-primary">{q.question}</p>
                         <input
                           className="min-h-11 w-full rounded-input border border-border bg-surface px-4 py-2.5 text-base text-primary placeholder:text-muted transition-colors focus:outline-none focus:ring-2 focus:ring-accent/25"
-                          value={answers[q.id] ?? ''}
-                          onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
-                          placeholder="Ketik jawaban…"
+                          value={answers[q.id]?.text ?? ''}
+                          onChange={(e) => setAnswers((a) => ({
+                            ...a,
+                            [q.id]: { text: e.target.value, selected: a[q.id]?.selected ?? [] },
+                          }))}
+                          placeholder="Ketik jawaban tambahan…"
                         />
                         <div className="flex flex-wrap gap-2">
                           {q.quick_replies.map((reply) => (
                             <button
                               type="button"
                               key={reply}
-                              onClick={() => setAnswers((a) => ({ ...a, [q.id]: reply }))}
+                              onClick={() => setAnswers((a) => {
+                                const current = a[q.id] ?? { text: '', selected: [] };
+                                const exists = current.selected.includes(reply);
+                                return {
+                                  ...a,
+                                  [q.id]: {
+                                    ...current,
+                                    selected: exists
+                                      ? current.selected.filter((item) => item !== reply)
+                                      : [...current.selected, reply],
+                                  },
+                                };
+                              })}
                               className={`rounded-full border px-3.5 py-1 text-xs font-semibold transition-all active:scale-[0.98]
-                                ${(answers[q.id] ?? '') === reply
+                                ${(answers[q.id]?.selected ?? []).includes(reply)
                                   ? 'border-accent bg-accent text-accent-text'
                                   : 'border-border bg-surface text-secondary hover:border-accent/30 hover:text-accent'}`}
                             >
@@ -594,6 +736,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                             </button>
                           ))}
                         </div>
+                        <p className="text-[11px] text-muted">Boleh pilih lebih dari satu pilihan cepat.</p>
                         <span className="block font-mono text-[9px] uppercase tracking-widest text-muted">{q.category}</span>
                       </div>
                     ))}
@@ -630,7 +773,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                       <div className="h-full rounded-full bg-accent transition-all page-loader-bar" style={{ width: `${progress}%` }} />
                     </div>
                     <p className="text-sm font-semibold text-primary">{status}</p>
-                    <p className="text-xs text-muted">LLM besar bisa butuh beberapa menit. Selama log bergerak, proses masih jalan.</p>
+                    <p className="text-xs text-muted">Proses memanggil LLM — bisa butuh 1-2 menit per step. Jangan tinggalkan halaman.</p>
                   </div>
                   <div className="w-full rounded-card border border-border bg-surface-alt/70 p-4 text-left">
                     <div className="mb-3 flex items-center justify-between gap-3">
@@ -638,7 +781,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                       <span className="font-mono text-xs text-muted">{progress}%</span>
                     </div>
                     <div className="max-h-56 space-y-2 overflow-auto pr-1">
-                      {generateLogs.length > 0 ? generateLogs.map((log, idx) => (
+                      {generateLogs.length > 0 ? generateLogs.slice(-8).map((log, idx) => (
                         <div key={`${log.time}-${idx}`} className="grid grid-cols-[4.5rem_1fr] gap-3 rounded-input border border-border bg-surface px-3 py-2">
                           <span className="font-mono text-[10px] text-muted">{log.time}</span>
                           <span className="text-xs leading-relaxed text-secondary">
@@ -678,7 +821,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                   <div className="scroll-reveal">
                   <button
                     type="button"
-                    onClick={generatePrd}
+                    onClick={() => generatePrd()}
                     className="rounded-input bg-accent px-10 py-3.5 text-base font-black text-accent-text shadow-card transition-all hover:-translate-y-0.5 hover:bg-accent-hover hover:shadow-card-hover active:scale-[0.97]"
                   >
                     Generate PRD
@@ -695,12 +838,15 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
               <div className="scroll-reveal flex justify-end">
                 <button
                   type="button"
-                  onClick={generatePrd}
+                  onClick={() => generatePrd({ forceFresh: true })}
                   disabled={busy}
                   className="flex items-center gap-2 rounded-input border border-accent/30 bg-surface/80 px-5 py-2 text-sm font-semibold text-accent shadow-card transition hover:bg-accent/5 active:scale-[0.98] disabled:opacity-40"
                 >
                   {busy ? (
-                    <span className="size-4 animate-spin rounded-full border-2 border-border border-t-accent" />
+                    <>
+                      <span className="size-4 animate-spin rounded-full border-2 border-border border-t-accent" />
+                      <span>Fresh regenerate…</span>
+                    </>
                   ) : (
                     'Generate ulang'
                   )}
@@ -709,7 +855,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
               <div className="scroll-reveal flex gap-1 rounded-card border border-border bg-surface/88 p-1 shadow-card backdrop-blur-xl">
                 {[
                   { id: 'prd' as const, label: 'PRD Document' },
-                  { id: 'diagram' as const, label: 'Task Diagram' },
+                  { id: 'diagram' as const, label: 'Realtime MCP' },
                 ].map((tab) => (
                   <button
                     key={tab.id}
@@ -782,7 +928,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
                   </div>
                   {llmError && (
                     <div className="mb-4 rounded-card border border-pastel-yellow bg-pastel-yellow p-4 text-sm text-pastel-yellow-text">
-                      PRD ini dibuat memakai fallback karena koneksi ke LLM proxy gagal. Detail: {llmError}
+                      PRD ini dibuat memakai fallback karena {fallbackReasonLabel(llmError)}. Detail: {llmError}
                     </div>
                   )}
                   {prdText ? (
@@ -801,6 +947,7 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
             </div>
           )}
 
+          </div>
         </div>
       </div>
       {showSettings && <LlmSettings onClose={() => setShowSettings(false)} />}
@@ -820,25 +967,8 @@ export function PrdWizard({ session }: { session: import('next-auth').Session })
             </div>
 
             <pre id="agent-instruction-source" className="overflow-auto rounded-xl border border-border bg-canvas p-5 font-mono text-xs leading-relaxed text-primary max-h-[50vh]">
-{`Kamu adalah AI engineer. Implementasikan aplikasi berikut berdasarkan PRD ini.
-
-PROJECT: ${title}
-TECH STACK: ${(() => { try { return JSON.stringify(stack ?? {}); } catch { return 'Lihat PRD'; } })()}
-
-INSTRUKSI:
-1. Baca PRD markdown di bawah untuk memahami requirement
-2. Kerjakan task sesuai urutan (dari task pertama yang statusnya todo)
-3. Jangan nambah fitur di luar PRD — strictly follow the spec
-4. Kalo ada keputusan teknis yang ga disebut di PRD, pilih yang paling sederhana
-5. Tanya kalo ada yang ambigu
-
-PRD MARKDOWN (untuk referensi):
-${prdText.slice(0, 8000)}${prdText.length > 8000 ? '\n... (truncated, lihat file untuk lengkap)' : ''}
-
-${mcpInfo ? `MCP ENDPOINT: ${mcpInfo.endpoint}
-MCP TOKEN: ${mcpInfo.token ?? '(lihat di web)'}
-Agent bisa panggil tools: get_prd, list_tasks, get_next_task, update_task_status` : ''}
-`}</pre>
+{buildAgentInstruction(title, stack, prdText, mcpInfo?.endpoint, mcpInfo?.token)}
+</pre>
 
             <div className="mt-4 flex justify-end gap-2">
               <button
@@ -850,6 +980,21 @@ Agent bisa panggil tools: get_prd, list_tasks, get_next_task, update_task_status
                 className="rounded-xl bg-accent px-5 py-2 text-sm font-medium text-accent-text transition-colors hover:bg-accent-hover"
               >
                 Copy Instruction
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const blob = new Blob([buildAgentInstruction(title, stack, prdText, mcpInfo?.endpoint, mcpInfo?.token)], { type: 'text/markdown' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `${toSafeFilename(title)}_agent.md`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                }}
+                className="rounded-xl border border-border bg-surface px-5 py-2 text-sm font-medium text-secondary transition-colors hover:bg-surface-alt"
+              >
+                Download MD
               </button>
             </div>
           </div>

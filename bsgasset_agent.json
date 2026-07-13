@@ -1,0 +1,1784 @@
+{
+  "agent": {
+    "version": "1.0",
+    "generated_at": "2026-07-12T17:19:39.497Z"
+  },
+  "project": {
+    "id": "cmri1ml69008hm01y80xxh7vj",
+    "title": "BSGAsset",
+    "overview": "BSGAsset adalah web app internal untuk pengelolaan aset logistik dan perangkat IT perusahaan skala kecil. MVP fokus pada data aset terpusat, lokasi manual, stok, peminjaman dan pengembalian satu aset per transaksi, approval Admin wajib, audit log, notifikasi stok menipis in-app, dan laporan PDF/CSV. Model aset yang dipakai adalah hybrid: unit bernilai tinggi memakai kode aset unik per unit, sedangkan aset stok memakai jumlah stok. Fitur yang tidak termasuk MVP: hardware tracking, barcode/QR, WhatsApp/Telegram, mobile app native, dan integrasi ERP/accounting.",
+    "tech_stack": {
+      "backend": "Next.js Route Handlers",
+      "database": "PostgreSQL",
+      "frontend": "Next.js",
+      "realtime": "SSE",
+      "auth_ready": true
+    },
+    "architecture_text": "# BSGAsset\n\n## 1. Ringkasan & Latar Belakang\n\nBSGAsset adalah aplikasi web untuk membantu perusahaan mengelola, memantau, dan mengendalikan aset logistik maupun perangkat IT secara terpusat. Aset yang dikelola mencakup laptop, komputer, printer, proyektor, dan alat kerja lain yang dimiliki perusahaan.\n\nSaat ini pengelolaan aset dilakukan menggunakan Excel/Google Sheet dan belum ada sistem terpusat. Kondisi ini menyebabkan data aset sulit dilacak, riwayat penggunaan tidak lengkap, serta meningkatkan risiko aset hilang, rusak, atau disalahgunakan.\n\nBSGAsset akan menyediakan sistem berbasis web dengan dua jenis pengguna:\n\n- **Admin**: memiliki hak akses penuh untuk mengelola data aset, stok, lokasi, kondisi, transaksi peminjaman/pengembalian, audit log, notifikasi stok menipis, dan laporan.\n- **Staff**: dapat melihat aset yang tersedia, mengajukan peminjaman, serta melakukan proses pengembalian tanpa mengubah data master.\n\nSkala penggunaan awal:\n\n- Jumlah aset: **<100 aset**\n- Jumlah user: **<20 user**\n- Jumlah role: **Admin dan Staff**\n\nTech stack yang sudah ditentukan:\n\n- Frontend: **Next.js**\n- Backend: **Next.js Route Handlers**\n- Database: **PostgreSQL**\n- Realtime: **Server-Sent Events / SSE**\n- Auth: **auth_ready: true**\n\nDeadline pengembangan versi awal adalah **<1 bulan**, sehingga MVP harus fokus pada fitur inti yang langsung menyelesaikan masalah utama: **aset sering hilang**.\n\n---\n\n## 2. Masalah yang Diselesaikan\n\n### Masalah Utama\n\nPerusahaan sering mengalami kehilangan aset karena pencatatan aset, lokasi, peminjaman, dan pengembalian masih dilakukan secara manual melalui Excel/Google Sheet atau belum terdokumentasi dengan baik.\n\n### Pain Point Saat Ini\n\n1. **Data aset tersebar dan tidak terstruktur**\n   - Data aset saat ini dikelola melalui Excel/Google Sheet.\n   - Tidak ada sistem yang memastikan data aset selalu mutakhir.\n\n2. **Riwayat peminjaman tidak lengkap**\n   - Sulit mengetahui siapa yang terakhir memakai aset.\n   - Sulit melacak kapan aset dipinjam dan dikembalikan.\n\n3. **Status aset tidak real-time**\n   - Staff tidak selalu mengetahui aset mana yang tersedia.\n   - Admin sulit mengetahui lokasi dan kondisi aset terkini.\n\n4. **Risiko kehilangan aset tinggi**\n   - Tidak ada workflow approval yang baku.\n   - Tidak ada audit log untuk perubahan data aset dan transaksi.\n\n5. **Laporan manual memakan waktu**\n   - Manajemen membutuhkan laporan aset berdasarkan tanggal, lokasi, kategori, atau status.\n   - Admin membutuhkan export laporan untuk analisis dan dokumentasi.\n\n---\n\n## 3. Tujuan (Goals)\n\n1. **Mengurangi kehilangan aset**\n   - Sistem harus dapat mencatat peminjam, waktu pengajuan, waktu pengambilan, waktu pengembalian, lokasi, dan kondisi aset.\n\n2. **Menyediakan data aset terpusat**\n   - Semua aset memiliki data lengkap: kode aset, nama aset, kategori, lokasi penyimpanan, jumlah stok, kondisi, dan status ketersediaan.\n\n3. **Membakukan proses peminjaman**\n   - Semua peminjaman wajib melalui approval Admin.\n   - Tidak ada aset yang dapat dipinjam langsung tanpa persetujuan.\n\n4. **Meningkatkan akuntabilitas penggunaan aset**\n   - Setiap transaksi harus memiliki riwayat yang jelas.\n   - Setiap perubahan penting harus tercatat dalam audit log.\n\n5. **Memudahkan Admin membuat laporan**\n   - Laporan dapat difilter berdasarkan tanggal, lokasi, kategori, dan status aset.\n   - Laporan dapat diekspor dalam format PDF untuk manajemen dan Excel/CSV untuk Admin.\n\n6. **Menyediakan sistem yang sederhana**\n   - BSGAsset harus lebih sederhana dibanding solusi sejenis.\n   - Fokus pada workflow aset masuk, aset keluar, peminjaman, pengembalian, stok, kondisi, lokasi, audit, dan laporan.\n\n---\n\n## 4. Non-Goals (di luar scope versi ini)\n\n1. **Tidak ada integrasi hardware tracking**\n   - Lokasi aset tidak dilacak menggunakan GPS, RFID, BLE, IoT, atau hardware tracking lain.\n   - Lokasi aset di versi ini diinput manual oleh Admin/Staff sesuai hak akses.\n\n2. **Tidak ada scan barcode/QR di MVP**\n   - Pencarian dan identifikasi aset dilakukan melalui kode aset dan daftar aset.\n   - QR/barcode dapat dipertimbangkan setelah MVP.\n\n3. **Tidak ada peminjaman tanpa approval**\n   - Semua peminjaman wajib melalui approval Admin.\n   - Tidak ada exception untuk kategori aset tertentu pada versi ini.\n\n4. **Tidak ada workflow perbaikan aset yang kompleks**\n   - Sistem hanya menandai aset sebagai Rusak dan menyimpan riwayat kerusakan.\n   - Proses vendor repair, estimasi biaya, sparepart, dan approval perbaikan tidak termasuk MVP.\n\n5. **Tidak ada integrasi WhatsApp/Telegram pada MVP**\n   - Notifikasi stok menipis dan notifikasi workflow ditampilkan di dalam aplikasi.\n   - Integrasi WhatsApp/Telegram dapat menjadi pengembangan lanjutan karena jawaban klarifikasi menyebut “WhatsApp/Telegram” sekaligus “di dalam aplikasi saja”. Untuk MVP, scope dikunci ke in-app notification.\n\n6. **Tidak ada migrasi otomatis dari Excel/Google Sheet**\n   - Data lama akan dimasukkan secara manual sesuai jawaban klarifikasi.\n   - Import massal Excel/CSV tidak termasuk MVP kecuali diputuskan sebagai enhancement.\n\n7. **Tidak ada multi-company/multi-tenant**\n   - Sistem diasumsikan digunakan oleh satu perusahaan/organisasi.\n\n8. **Tidak ada mobile app native**\n   - Aplikasi berbasis web responsif.\n   - Tidak ada aplikasi Android/iOS native pada versi ini.\n\n9. **Tidak ada integrasi ERP/accounting**\n   - Nilai depresiasi aset, pembukuan, dan integrasi ke sistem finance tidak termasuk MVP.\n\n---\n\n## 5. Target User / Persona\n\n### 5.1 Admin\n\n**Deskripsi:**  \nPengguna internal yang bertanggung jawab mengelola aset perusahaan, memverifikasi peminjaman, mencatat pengambilan dan pengembalian, memperbarui stok, mengelola lokasi, mengecek kondisi aset, dan membuat laporan.\n\n**Kebutuhan utama:**\n\n- Mengelola data aset secara CRUD.\n- Mencatat barang masuk dan keluar.\n- Melihat semua aset dan statusnya.\n- Memproses approval peminjaman.\n- Mencatat waktu pengambilan barang.\n- Mencatat waktu pengembalian barang.\n- Mengubah kondisi aset menjadi Baik atau Rusak.\n- Melihat seluruh riwayat peminjaman.\n- Mengelola lokasi aset.\n- Menerima notifikasi stok menipis di dalam aplikasi.\n- Mengekspor laporan PDF untuk manajemen.\n- Mengekspor laporan Excel/CSV untuk kebutuhan Admin.\n- Melihat audit log perubahan data dan transaksi.\n\n**Batasan akses:**\n\n- Admin memiliki akses penuh ke data master aset, transaksi, laporan, lokasi, dan audit log.\n\n---\n\n### 5.2 Staff\n\n**Deskripsi:**  \nPengguna internal yang membutuhkan aset perusahaan untuk bekerja dan hanya dapat menggunakan sistem untuk melihat ketersediaan aset, mengajukan peminjaman, dan melakukan pengembalian.\n\n**Kebutuhan utama:**\n\n- Melihat daftar aset yang tersedia.\n- Melihat detail dasar aset.\n- Mengajukan peminjaman aset.\n- Melihat status pengajuan sendiri.\n- Mengajukan proses pengembalian aset.\n\n**Batasan akses:**\n\n- Staff tidak dapat membuat, mengubah, atau menghapus data master aset.\n- Staff tidak dapat mengubah stok aset.\n- Staff tidak dapat mengubah kondisi aset secara final.\n- Staff tidak dapat menyetujui peminjaman.\n- Staff tidak dapat melihat seluruh riwayat semua user, kecuali riwayat miliknya sendiri.\n- Staff tidak dapat mengakses audit log.\n\n---\n\n### 5.3 Manajemen\n\n**Deskripsi:**  \nPihak yang membutuhkan laporan aset untuk evaluasi dan pengambilan keputusan.\n\n**Kebutuhan utama:**\n\n- Melihat laporan dalam bentuk dashboard.\n- Menerima laporan PDF berdasarkan periode, lokasi, kategori, atau status aset.\n\n**Batasan akses:**\n\n- Asumsi: Manajemen tidak memiliki role login khusus di MVP.\n- Laporan untuk manajemen dibuat atau diekspor oleh Admin.\n\n---\n\n## 6. User Stories & Use Cases\n\n### US-01: Admin mengelola data aset\n\n**Sebagai Admin, saya ingin menambah, melihat, mengubah, dan menghapus data aset, supaya data aset perusahaan terdokumentasi secara terpusat.**\n\nAcceptance Criteria:\n\n- Admin dapat membuat aset baru dengan field minimal:\n  - kode aset\n  - nama aset\n  - kategori\n  - lokasi penyimpanan\n  - jumlah stok\n  - kondisi\n  - status ketersediaan\n- Kode aset wajib unik.\n- Admin dapat mengubah data aset.\n- Admin dapat menghapus aset hanya jika tidak sedang dipinjam.\n- Setiap create, update, dan delete tercatat di audit log.\n- Staff tidak dapat mengakses fungsi create, update, atau delete aset.\n\n---\n\n### US-02: Admin mencatat barang masuk\n\n**Sebagai Admin, saya ingin mencatat barang masuk, supaya stok aset bertambah dan riwayat perubahan stok terdokumentasi.**\n\nAcceptance Criteria:\n\n- Admin dapat memilih aset dan menambahkan jumlah stok.\n- Sistem mencatat tanggal, jumlah, Admin pencatat, dan catatan opsional.\n- Jumlah stok aset bertambah sesuai input.\n- Perubahan stok tercatat di audit log.\n- Jika input jumlah kurang dari atau sama dengan 0, sistem menolak transaksi.\n\n---\n\n### US-03: Admin mencatat barang keluar\n\n**Sebagai Admin, saya ingin mencatat barang keluar, supaya stok aset berkurang untuk kebutuhan penghapusan, kehilangan, rusak berat, atau alasan operasional lain.**\n\nAcceptance Criteria:\n\n- Admin dapat memilih aset dan mengurangi stok.\n- Admin wajib mengisi alasan barang keluar.\n- Sistem menolak transaksi jika jumlah keluar lebih besar dari stok tersedia.\n- Sistem mencatat tanggal, jumlah, Admin pencatat, dan alasan.\n- Perubahan stok tercatat di audit log.\n\n---\n\n### US-04: Staff melihat daftar aset tersedia\n\n**Sebagai Staff, saya ingin melihat daftar aset yang tersedia, supaya saya dapat memilih aset yang bisa dipinjam.**\n\nAcceptance Criteria:\n\n- Staff dapat melihat daftar aset dengan status tersedia.\n- Staff dapat memfilter berdasarkan kategori dan lokasi.\n- Staff dapat mencari aset berdasarkan kode aset atau nama aset.\n- Staff tidak melihat tombol edit/hapus aset.\n- Aset dengan status Dipinjam atau Rusak tidak dapat diajukan untuk peminjaman.\n\n---\n\n### US-05: Staff mengajukan peminjaman\n\n**Sebagai Staff, saya ingin mengajukan peminjaman aset, supaya saya dapat menggunakan aset perusahaan secara resmi dan tercatat.**\n\nAcceptance Criteria:\n\n- Staff dapat mengajukan peminjaman untuk aset yang tersedia.\n- Semua pengajuan memiliki status awal `Menunggu Approval`.\n- Staff wajib mengisi kebutuhan/purpose dan estimasi tanggal pengembalian.\n- Sistem mencatat waktu pengajuan otomatis.\n- Staff tidak dapat mengajukan aset yang sedang Dipinjam atau Rusak.\n- Staff dapat melihat status pengajuannya sendiri.\n\n---\n\n### US-06: Admin menyetujui atau menolak peminjaman\n\n**Sebagai Admin, saya ingin memverifikasi pengajuan peminjaman, supaya hanya peminjaman yang valid yang dapat diproses.**\n\nAcceptance Criteria:\n\n- Admin dapat melihat daftar pengajuan dengan status `Menunggu Approval`.\n- Admin dapat menyetujui atau menolak pengajuan.\n- Jika disetujui, status transaksi berubah menjadi `Disetujui`.\n- Jika ditolak, Admin wajib mengisi alasan penolakan.\n- Staff dapat melihat status disetujui/ditolak untuk pengajuannya.\n- Keputusan approval tercatat di audit log.\n\n---\n\n### US-07: Admin mencatat waktu pengambilan barang\n\n**Sebagai Admin, saya ingin mencatat waktu pengambilan barang setelah pengajuan disetujui, supaya sistem mengetahui aset sudah benar-benar digunakan.**\n\nAcceptance Criteria:\n\n- Admin dapat mencatat pengambilan hanya untuk transaksi berstatus `Disetujui`.\n- Saat pengambilan dicatat, status transaksi berubah menjadi `Dipinjam`.\n- Status aset berubah menjadi `Dipinjam`.\n- Sistem mencatat waktu pengambilan aktual.\n- Aset yang sudah berstatus Dipinjam tidak dapat diajukan oleh Staff lain.\n- Pencatatan pengambilan tercatat di audit log.\n\n---\n\n### US-08: Staff mengajukan pengembalian aset\n\n**Sebagai Staff, saya ingin mengajukan pengembalian aset, supaya Admin dapat memeriksa dan menutup transaksi peminjaman.**\n\nAcceptance Criteria:\n\n- Staff dapat mengajukan pengembalian untuk aset yang sedang dipinjam olehnya.\n- Sistem mencatat waktu pengajuan pengembalian.\n- Status transaksi berubah menjadi `Menunggu Pemeriksaan Pengembalian`.\n- Staff tidak dapat mengajukan pengembalian aset yang bukan sedang dipinjam olehnya.\n- Admin menerima notifikasi in-app bahwa ada pengembalian yang perlu diperiksa.\n\n---\n\n### US-09: Admin memeriksa dan menyelesaikan pengembalian\n\n**Sebagai Admin, saya ingin memeriksa kondisi aset saat dikembalikan, supaya kondisi akhir aset tercatat dan status aset diperbarui.**\n\nAcceptance Criteria:\n\n- Admin dapat membuka transaksi pengembalian yang menunggu pemeriksaan.\n- Admin wajib memilih kondisi akhir aset:\n  - Baik\n  - Rusak\n- Admin dapat menambahkan catatan kondisi.\n- Sistem mencatat waktu pengembalian aktual.\n- Jika kondisi Baik, status aset menjadi `Tersedia`.\n- Jika kondisi Rusak, status aset menjadi `Rusak` dan tidak bisa dipinjam.\n- Riwayat kondisi tersimpan pada transaksi.\n- Pemeriksaan pengembalian tercatat di audit log.\n\n---\n\n### US-10: Admin mengelola lokasi aset\n\n**Sebagai Admin, saya ingin mengelola lokasi aset secara manual, supaya lokasi penyimpanan aset selalu terdokumentasi.**\n\nAcceptance Criteria:\n\n- Admin dapat membuat, mengubah, dan menghapus data lokasi.\n- Admin dapat mengubah lokasi penyimpanan aset.\n- Sistem menolak penghapusan lokasi yang masih digunakan aset aktif.\n- Perubahan lokasi tercatat di audit log.\n- Staff hanya dapat melihat lokasi aset, tidak dapat mengubahnya.\n\n---\n\n### US-11: Admin menerima notifikasi stok menipis\n\n**Sebagai Admin, saya ingin menerima notifikasi stok menipis di dalam aplikasi, supaya saya dapat segera melakukan pengadaan atau pengecekan aset.**\n\nAcceptance Criteria:\n\n- Admin dapat melihat notifikasi in-app saat stok aset berada di bawah ambang batas minimum.\n- Ambang batas minimum dapat disimpan per aset.\n- Notifikasi muncul di dashboard Admin.\n- Notifikasi stok menipis tidak dikirim ke WhatsApp/Telegram pada MVP.\n- Notifikasi tercatat dengan timestamp.\n\n---\n\n### US-12: Admin melihat riwayat peminjaman\n\n**Sebagai Admin, saya ingin melihat seluruh riwayat peminjaman, supaya saya dapat melacak penggunaan aset dan mengurangi risiko kehilangan.**\n\nAcceptance Criteria:\n\n- Admin dapat melihat riwayat semua transaksi.\n- Riwayat dapat difilter berdasarkan:\n  - tanggal\n  - aset\n  - peminjam\n  - status transaksi\n  - lokasi\n  - kategori\n- Riwayat menampilkan minimal:\n  - nama peminjam\n  - kode aset\n  - waktu pengajuan\n  - waktu approval/penolakan\n  - waktu pengambilan\n  - waktu pengajuan pengembalian\n  - waktu pengembalian aktual\n  - kondisi akhir\n  - status transaksi\n- Staff hanya dapat melihat riwayat peminjamannya sendiri.\n\n---\n\n### US-13: Admin membuat laporan\n\n**Sebagai Admin, saya ingin membuat laporan aset berdasarkan tanggal, lokasi, kategori, dan status, supaya laporan dapat digunakan oleh manajemen dan operasional.**\n\nAcceptance Criteria:\n\n- Admin dapat melihat dashboard laporan.\n- Admin dapat memfilter laporan berdasarkan:\n  - tanggal\n  - lokasi\n  - kategori\n  - status aset\n- Admin dapat mengekspor PDF untuk manajemen.\n- Admin dapat mengekspor Excel/CSV untuk kebutuhan Admin.\n- Laporan menampilkan ringkasan jumlah aset, aset tersedia, aset dipinjam, aset rusak, dan aset hilang/barang keluar jika dicatat.\n- Staff tidak dapat mengakses menu laporan global.\n\n---\n\n### US-14: Admin melihat audit log\n\n**Sebagai Admin, saya ingin melihat audit log, supaya setiap perubahan data aset, stok, status, dan transaksi dapat ditelusuri.**\n\nAcceptance Criteria:\n\n- Audit log mencatat:\n  - user pelaku\n  - role pelaku\n  - aksi\n  - entitas yang diubah\n  - ID entitas\n  - nilai sebelum perubahan\n  - nilai sesudah perubahan\n  - timestamp\n- Admin dapat memfilter audit log berdasarkan user, tanggal, aksi, dan entitas.\n- Staff tidak dapat mengakses audit log.\n- Audit log tidak dapat dihapus melalui UI MVP.\n\n---\n\n## 7. Functional Requirements\n\n### 7.1 Modul Autentikasi & Role Access\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nSistem menggunakan mekanisme autentikasi yang sudah tersedia (`auth_ready: true`) dan membatasi akses berdasarkan role Admin dan Staff.\n\nRequirements:\n\n- Sistem harus mengenali user yang login.\n- Sistem harus menyimpan role user: Admin atau Staff.\n- Menu dan aksi harus dibatasi sesuai role.\n- Staff tidak boleh mengakses endpoint Admin.\n- Admin dapat mengakses seluruh modul operasional.\n\nAcceptance Criteria:\n\n- User tanpa login tidak dapat mengakses aplikasi.\n- Admin dapat membuka menu aset, lokasi, transaksi, laporan, notifikasi, dan audit log.\n- Staff hanya dapat membuka daftar aset tersedia, pengajuan peminjaman, pengembalian, dan riwayat pribadi.\n- Request API dari Staff ke endpoint Admin ditolak dengan status 403.\n- Request tanpa autentikasi ditolak dengan status 401.\n\n---\n\n### 7.2 Modul Manajemen Aset\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nAdmin dapat mengelola data master aset secara lengkap.\n\nData minimal aset:\n\n- jenis pencatatan (`unik` atau `stok`)\n- kode aset\n- nama aset\n- kategori\n- lokasi penyimpanan\n- jumlah stok\n- kondisi\n- status ketersediaan\n- minimum stok\n- created_at\n- updated_at\n\nStatus aset:\n\n- `Tersedia`\n- `Dipinjam`\n- `Rusak`\n- `Tidak Aktif`\n\nKondisi aset:\n\n- `Baik`\n- `Rusak`\n\nRequirements:\n\n- Admin dapat membuat aset baru.\n- Admin dapat melihat daftar semua aset.\n- Admin dapat mengubah data aset.\n- Admin dapat menghapus atau menonaktifkan aset.\n- Staff hanya dapat melihat aset yang tersedia.\n- Aset bertipe `unik` wajib memiliki kode aset unik per unit dan jumlah stok `1`.\n- Aset bertipe `stok` boleh memiliki jumlah stok lebih dari `1`.\n- Kode aset harus unik.\n- Status aset harus otomatis berubah berdasarkan transaksi peminjaman/pengembalian.\n\nAcceptance Criteria:\n\n- Sistem menolak pembuatan aset dengan kode aset duplikat.\n- Sistem menolak input jumlah stok selain `1` untuk aset bertipe `unik`.\n- Sistem menolak penghapusan aset yang sedang dipinjam.\n- Perubahan data aset tercatat di audit log.\n- Aset Rusak tidak muncul sebagai aset yang bisa dipinjam Staff.\n- Aset Dipinjam tidak bisa dipinjam oleh user lain.\n\n---\n\n### 7.3 Modul Kategori Aset\n\n**Prioritas:** P1\n\n**Deskripsi:**  \nAdmin dapat mengelola kategori aset seperti Laptop, Komputer, Printer, Proyektor, atau kategori lain.\n\nRequirements:\n\n- Admin dapat membuat kategori.\n- Admin dapat mengubah nama kategori.\n- Admin dapat menghapus kategori jika belum digunakan.\n- Kategori digunakan sebagai filter aset dan laporan.\n\nAcceptance Criteria:\n\n- Sistem menolak penghapusan kategori yang masih digunakan oleh aset.\n- Staff dapat memfilter aset berdasarkan kategori.\n- Laporan dapat difilter berdasarkan kategori.\n\n---\n\n### 7.4 Modul Lokasi Aset\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nSistem mencatat lokasi penyimpanan aset secara manual. Tidak ada integrasi hardware tracking atau scan QR/barcode pada MVP.\n\nRequirements:\n\n- Admin dapat membuat lokasi.\n- Admin dapat mengubah lokasi.\n- Admin dapat menghapus lokasi jika tidak digunakan.\n- Admin dapat mengubah lokasi aset.\n- Staff dapat melihat lokasi aset tersedia.\n\nAcceptance Criteria:\n\n- Lokasi aset tersimpan pada data aset.\n- Perubahan lokasi tercatat di audit log.\n- Sistem menolak penghapusan lokasi yang masih dipakai aset aktif.\n- Lokasi dapat digunakan sebagai filter laporan.\n\n---\n\n### 7.5 Modul Barang Masuk & Barang Keluar\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nAdmin dapat mencatat penambahan atau pengurangan stok aset.\n\nRequirements:\n\n- Admin dapat mencatat barang masuk.\n- Admin dapat mencatat barang keluar.\n- Barang keluar wajib memiliki alasan.\n- Sistem memperbarui jumlah stok setelah transaksi.\n- Sistem memicu notifikasi stok menipis jika stok di bawah minimum.\n- Untuk aset bertipe `unik`, barang masuk berarti menambahkan unit baru dengan kode aset baru, sedangkan barang keluar berarti menonaktifkan atau mengeluarkan unit spesifik tersebut.\n- Untuk aset bertipe `stok`, barang masuk dan keluar mengubah jumlah stok pada record aset yang sama.\n\nAcceptance Criteria:\n\n- Jumlah barang masuk harus lebih dari 0.\n- Jumlah barang keluar harus lebih dari 0.\n- Sistem menolak barang keluar jika stok tidak cukup.\n- Sistem menolak barang keluar untuk aset `unik` jika unit yang dipilih masih aktif dipinjam atau belum diproses Admin.\n- Setiap perubahan stok tercatat di audit log.\n- Riwayat stok dapat dilihat Admin.\n\n---\n\n### 7.6 Modul Pengajuan Peminjaman\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nStaff dapat mengajukan peminjaman aset yang tersedia. Semua peminjaman wajib approval Admin.\n\nStatus transaksi peminjaman:\n\n- `Menunggu Approval`\n- `Disetujui`\n- `Ditolak`\n- `Dipinjam`\n- `Menunggu Pemeriksaan Pengembalian`\n- `Selesai`\n- `Selesai dengan Kerusakan`\n- `Dibatalkan`\n\nRequirements:\n\n- Staff dapat memilih aset tersedia.\n- Staff wajib mengisi tujuan peminjaman.\n- Staff wajib mengisi estimasi tanggal pengembalian.\n- Sistem mencatat waktu pengajuan.\n- Transaksi masuk ke daftar approval Admin.\n- Satu transaksi peminjaman hanya berisi satu aset.\n- Staff dapat membatalkan pengajuan miliknya sendiri selama status masih `Menunggu Approval`.\n\nAcceptance Criteria:\n\n- Staff tidak dapat meminjam aset Dipinjam.\n- Staff tidak dapat meminjam aset Rusak.\n- Staff tidak dapat mengubah data master aset saat mengajukan peminjaman.\n- Staff dapat membatalkan pengajuan sendiri sebelum disetujui Admin.\n- Sistem menolak pembatalan jika status pengajuan sudah `Disetujui`, `Dipinjam`, atau selesai.\n- Setelah pengajuan dibuat, status transaksi adalah `Menunggu Approval`.\n- Admin menerima notifikasi in-app untuk pengajuan baru.\n\n---\n\n### 7.7 Modul Approval Peminjaman\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nAdmin memverifikasi semua pengajuan peminjaman.\n\nRequirements:\n\n- Admin dapat melihat daftar pengajuan menunggu approval.\n- Admin dapat menyetujui pengajuan.\n- Admin dapat menolak pengajuan dengan alasan.\n- Sistem mencatat waktu approval/penolakan.\n- Sistem mencatat Admin yang melakukan approval/penolakan.\n\nAcceptance Criteria:\n\n- Pengajuan yang ditolak wajib memiliki alasan.\n- Pengajuan yang disetujui berubah status menjadi `Disetujui`.\n- Pengajuan yang ditolak berubah status menjadi `Ditolak`.\n- Approval tercatat di audit log.\n- Staff dapat melihat hasil approval pada riwayat pribadi.\n\n---\n\n### 7.8 Modul Pengambilan Aset\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nSetelah disetujui, Admin mencatat waktu pengambilan barang.\n\nRequirements:\n\n- Admin dapat mencatat pengambilan untuk transaksi `Disetujui`.\n- Sistem mencatat waktu pengambilan aktual.\n- Status transaksi berubah menjadi `Dipinjam`.\n- Status aset berubah menjadi `Dipinjam`.\n\nAcceptance Criteria:\n\n- Sistem menolak pencatatan pengambilan untuk transaksi yang belum disetujui.\n- Setelah aset diambil, aset tidak dapat diajukan oleh Staff lain.\n- Pengambilan tercatat di audit log.\n\n---\n\n### 7.9 Modul Pengembalian Aset\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nStaff mengajukan pengembalian, lalu Admin memeriksa kondisi fisik aset dan menyelesaikan transaksi.\n\nRequirements:\n\n- Staff dapat mengajukan pengembalian untuk aset yang dipinjamnya.\n- Admin memeriksa kondisi aset.\n- Admin mencatat kondisi akhir.\n- Admin mencatat waktu pengembalian aktual.\n- Admin dapat menandai aset Baik atau Rusak.\n\nAcceptance Criteria:\n\n- Staff tidak dapat mengembalikan aset milik transaksi user lain.\n- Jika aset Baik, status transaksi menjadi `Selesai` dan status aset menjadi `Tersedia`.\n- Jika aset Rusak, status transaksi menjadi `Selesai dengan Kerusakan` dan status aset menjadi `Rusak`.\n- Kondisi akhir dan catatan pemeriksaan tersimpan di riwayat.\n- Pengembalian tercatat di audit log.\n\n---\n\n### 7.10 Modul Riwayat Peminjaman\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nSistem menyimpan riwayat lengkap peminjaman dan pengembalian aset.\n\nRequirements:\n\n- Admin dapat melihat semua riwayat.\n- Staff hanya dapat melihat riwayat miliknya sendiri.\n- Riwayat menyimpan:\n  - nama peminjam\n  - kode aset\n  - waktu pengajuan\n  - waktu approval/penolakan\n  - waktu pengambilan\n  - waktu pengajuan pengembalian\n  - waktu pengembalian aktual\n  - kondisi akhir\n  - status transaksi\n  - alasan penolakan jika ada\n  - catatan kerusakan jika ada\n\nAcceptance Criteria:\n\n- Riwayat transaksi tidak hilang meskipun aset dinonaktifkan.\n- Riwayat dapat difilter oleh Admin.\n- Staff tidak dapat melihat riwayat user lain.\n- Semua perubahan status transaksi tercatat dengan timestamp.\n\n---\n\n### 7.11 Modul Notifikasi In-App\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nSistem menyediakan notifikasi di dalam aplikasi untuk Admin dan Staff.\n\nJenis notifikasi MVP:\n\n- Pengajuan peminjaman baru untuk Admin.\n- Hasil approval untuk Staff.\n- Pengajuan pengembalian untuk Admin.\n- Stok menipis untuk Admin.\n\nRequirements:\n\n- Sistem membuat notifikasi saat event penting terjadi.\n- Notifikasi dapat ditandai sudah dibaca.\n- Notifikasi ditampilkan di dashboard atau notification center.\n- Realtime notification menggunakan SSE.\n\nAcceptance Criteria:\n\n- Admin menerima notifikasi saat Staff membuat pengajuan peminjaman.\n- Staff menerima notifikasi saat pengajuan disetujui atau ditolak.\n- Admin menerima notifikasi saat Staff mengajukan pengembalian.\n- Admin menerima notifikasi saat stok berada di bawah minimum.\n- Jika koneksi SSE terputus, notifikasi tetap dapat dilihat setelah halaman direfresh.\n\n---\n\n### 7.12 Modul Laporan & Dashboard\n\n**Prioritas:** P0 untuk dashboard dasar, P1 untuk export lengkap\n\n**Deskripsi:**  \nAdmin dapat melihat ringkasan aset dan membuat laporan untuk operasional serta manajemen.\n\nRequirements P0:\n\n- Dashboard Admin menampilkan:\n  - total aset\n  - total aset tersedia\n  - total aset dipinjam\n  - total aset rusak\n  - stok menipis\n  - jumlah transaksi aktif\n- Dashboard dapat difilter minimal berdasarkan tanggal dan status.\n\nRequirements P1:\n\n- Laporan dapat difilter berdasarkan tanggal, lokasi, kategori, dan status aset.\n- Export PDF untuk manajemen.\n- Export Excel/CSV untuk Admin.\n\nAcceptance Criteria:\n\n- Admin dapat melihat dashboard setelah login.\n- Staff tidak dapat melihat dashboard global.\n- PDF berisi ringkasan dan detail laporan sesuai filter.\n- CSV/Excel berisi data yang dapat diolah ulang oleh Admin.\n- Filter laporan menghasilkan data sesuai parameter yang dipilih.\n\n---\n\n### 7.13 Modul Audit Log\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nAudit log wajib tersedia untuk mencatat perubahan data aset, status, stok, lokasi, dan transaksi.\n\nRequirements:\n\n- Sistem mencatat setiap aksi penting.\n- Audit log menyimpan before-after value untuk update.\n- Audit log hanya dapat dilihat Admin.\n- Audit log tidak dapat diedit atau dihapus melalui UI.\n\nEvent minimal yang harus dicatat:\n\n- Create/update/delete aset.\n- Perubahan stok.\n- Perubahan lokasi.\n- Pengajuan peminjaman.\n- Approval/penolakan.\n- Pengambilan aset.\n- Pengajuan pengembalian.\n- Pemeriksaan pengembalian.\n- Perubahan kondisi aset.\n- Export laporan.\n\nAcceptance Criteria:\n\n- Setiap event audit memiliki user, role, aksi, entitas, entity_id, timestamp.\n- Untuk update, sistem menyimpan nilai sebelum dan sesudah.\n- Staff tidak dapat mengakses audit log.\n- Audit log dapat difilter oleh Admin.\n\n---\n\n### 7.14 Modul Input Manual Data Awal\n\n**Prioritas:** P0\n\n**Deskripsi:**  \nKarena data aset lama perlu dimigrasikan melalui input manual, sistem harus mendukung Admin untuk memasukkan data aset awal satu per satu.\n\nRequirements:\n\n- Admin dapat input aset baru melalui form.\n- Form harus cukup sederhana agar cocok untuk jumlah aset awal <100.\n- Tidak ada kewajiban import otomatis dari Excel/Google Sheet pada MVP.\n\nAcceptance Criteria:\n\n- Admin dapat menyelesaikan input aset manual tanpa bantuan teknis.\n- Validasi field wajib tersedia.\n- Sistem menampilkan error jika data tidak valid.\n- Data aset yang sudah diinput langsung muncul di daftar aset.\n\n---\n\n## 8. Non-Functional Requirements\n\n### 8.1 Performance\n\n- Untuk skala awal <100 aset dan <20 user, halaman daftar aset harus load dalam waktu maksimal **2 detik** pada koneksi kantor normal.\n- Operasi create/update aset dan transaksi harus selesai maksimal **3 detik**.\n- Dashboard Admin harus load maksimal **3 detik**.\n- Export PDF/CSV untuk data <1.000 baris harus selesai maksimal **10 detik**.\n\n### 8.2 Security\n\n- Semua endpoint harus memvalidasi autentikasi.\n- Semua endpoint Admin harus memvalidasi role Admin.\n- Staff tidak boleh mengakses data user lain.\n- Password dan mekanisme login mengikuti sistem auth yang sudah siap.\n- Input user harus divalidasi untuk mencegah SQL injection, XSS, dan invalid payload.\n- Audit log tidak dapat diedit atau dihapus dari UI.\n- Export laporan hanya dapat dilakukan Admin.\n\n### 8.3 Availability\n\n- Target availability aplikasi selama jam kerja: **99%**.\n- Jika SSE gagal, aplikasi tetap berjalan dengan fallback refresh manual.\n- Data transaksi tidak boleh hilang ketika notifikasi realtime gagal.\n\n### 8.4 Scalability\n\n- MVP dioptimalkan untuk <100 aset dan <20 user.\n- Struktur database harus tetap memungkinkan peningkatan ke ribuan aset di masa depan.\n- Pagination wajib tersedia untuk daftar aset, transaksi, dan audit log meskipun data awal kecil.\n\n### 8.5 Reliability & Data Integrity\n\n- Status aset dan status transaksi harus konsisten.\n- Operasi approval, pengambilan, dan pengembalian harus menggunakan transaksi database agar tidak terjadi partial update.\n- Kode aset harus unik.\n- Perubahan stok tidak boleh menghasilkan nilai negatif.\n- Timestamp harus disimpan konsisten menggunakan timezone server yang disepakati.\n\n### 8.6 Usability\n\n- UI harus sederhana karena salah satu diferensiasi utama BSGAsset adalah lebih sederhana dari solusi sejenis.\n- Workflow utama harus dapat dipahami tanpa training panjang:\n  - input aset\n  - ajukan pinjam\n  - approve\n  - catat pengambilan\n  - ajukan pengembalian\n  - cek kondisi\n  - selesai\n- Form harus memiliki validasi dan pesan error yang jelas.\n\n---\n\n## 9. Edge Cases & Error Handling\n\n### 9.1 Aset dipinjam bersamaan oleh dua Staff\n\n**Kasus:** Dua Staff membuka halaman aset yang sama saat status masih Tersedia, lalu mengajukan peminjaman hampir bersamaan.\n\nHandling:\n\n- Sistem harus melakukan validasi status aset saat submit, bukan hanya saat halaman dibuka.\n- Jika aset sudah tidak tersedia, pengajuan kedua ditolak.\n- Pesan error: “Aset sudah tidak tersedia untuk dipinjam.”\n\n---\n\n### 9.2 Admin menyetujui pengajuan tetapi aset sudah tidak tersedia\n\n**Kasus:** Ada kondisi data berubah sebelum Admin approve.\n\nHandling:\n\n- Saat approval, sistem cek ulang status aset.\n- Jika aset tidak tersedia, approval ditolak.\n- Admin melihat pesan: “Aset tidak dapat disetujui karena status saat ini bukan Tersedia.”\n\n---\n\n### 9.3 Staff mencoba mengembalikan aset milik user lain\n\n**Kasus:** Staff memanipulasi URL/API untuk mengakses transaksi user lain.\n\nHandling:\n\n- Backend memvalidasi ownership transaksi.\n- Jika bukan miliknya, sistem mengembalikan 403.\n- Event percobaan akses tidak sah dicatat di audit/security log jika tersedia.\n\n---\n\n### 9.4 Aset rusak saat dikembalikan\n\n**Kasus:** Admin menemukan kerusakan fisik saat pemeriksaan.\n\nHandling:\n\n- Admin memilih kondisi akhir `Rusak`.\n- Sistem mengubah status aset menjadi `Rusak`.\n- Sistem menutup transaksi sebagai `Selesai dengan Kerusakan`.\n- Aset tidak muncul di daftar aset tersedia untuk Staff.\n- Catatan kerusakan wajib diisi.\n\n---\n\n### 9.5 Admin menghapus aset yang sedang dipinjam\n\n**Kasus:** Admin mencoba menghapus aset aktif.\n\nHandling:\n\n- Sistem menolak penghapusan.\n- Pesan error: “Aset sedang dipinjam dan tidak dapat dihapus.”\n- Admin dapat menonaktifkan aset hanya setelah transaksi selesai.\n\n---\n\n### 9.6 Stok barang keluar melebihi stok tersedia\n\n**Kasus:** Admin mencatat barang keluar lebih besar dari stok.\n\nHandling:\n\n- Sistem menolak transaksi.\n- Stok tidak berubah.\n- Pesan error: “Jumlah keluar melebihi stok tersedia.”\n\n---\n\n### 9.7 Stok menipis setelah barang keluar\n\n**Kasus:** Setelah pencatatan barang keluar, stok berada di bawah minimum.\n\nHandling:\n\n- Sistem membuat notifikasi in-app untuk Admin.\n- Notifikasi muncul di dashboard Admin.\n- Jika SSE aktif, notifikasi muncul realtime.\n- Jika SSE gagal, notifikasi muncul setelah refresh.\n\n---\n\n### 9.8 Koneksi SSE terputus\n\n**Kasus:** Notifikasi realtime tidak masuk karena koneksi SSE terputus.\n\nHandling:\n\n- UI menampilkan indikator koneksi realtime terputus jika memungkinkan.\n- Sistem mencoba reconnect otomatis.\n- Notifikasi tetap tersimpan di database.\n- User dapat melihat notifikasi setelah refresh.\n\n---\n\n### 9.9 Data aset manual tidak lengkap\n\n**Kasus:** Admin memasukkan data aset awal tetapi field wajib kosong.\n\nHandling:\n\n- Sistem menolak submit.\n- Field wajib ditandai.\n- Pesan error spesifik, misalnya “Kode aset wajib diisi.”\n\n---\n\n### 9.10 Kode aset duplikat\n\n**Kasus:** Admin memasukkan kode aset yang sudah ada.\n\nHandling:\n\n- Sistem menolak penyimpanan.\n- Pesan error: “Kode aset sudah digunakan.”\n- Tidak ada data duplikat tersimpan.\n\n---\n\n### 9.11 Staff mencoba mengakses endpoint Admin\n\n**Kasus:** Staff mengakses URL laporan, audit log, atau CRUD aset.\n\nHandling:\n\n- Backend mengembalikan 403.\n- UI redirect ke halaman tidak berwenang.\n- Tidak ada data Admin yang dikirim ke frontend.\n\n---\n\n### 9.12 Export laporan gagal\n\n**Kasus:** PDF/CSV gagal dibuat karena query error atau timeout.\n\nHandling:\n\n- Sistem menampilkan pesan error.\n- Tidak membuat file rusak.\n- Admin dapat mencoba ulang dengan filter data lebih kecil.\n- Error dicatat di log aplikasi.\n\n---\n\n### 9.13 Pengajuan peminjaman dibatalkan sebelum approval\n\n**Kasus:** Staff berubah pikiran sebelum Admin approve.\n\nHandling:\n\n- Asumsi: MVP menyediakan status `Dibatalkan` untuk transaksi yang masih `Menunggu Approval`.\n- Staff dapat membatalkan pengajuan miliknya sendiri hanya sebelum approval.\n- Setelah disetujui, pembatalan hanya dapat dilakukan oleh Admin.\n\n---\n\n### 9.14 Pengembalian tanpa pemeriksaan Admin\n\n**Kasus:** Staff menganggap aset sudah dikembalikan, tetapi Admin belum memeriksa.\n\nHandling:\n\n- Status transaksi tetap `Menunggu Pemeriksaan Pengembalian`.\n- Status aset belum menjadi Tersedia.\n- Aset belum bisa dipinjam user lain sampai Admin menyelesaikan pemeriksaan.\n\n---\n\n## 10. Success Metrics / KPI\n\n### KPI Utama\n\n1. **Penurunan jumlah aset hilang**\n   - Target: jumlah aset yang dicatat sebagai hilang/barang keluar karena kehilangan turun minimal **50% dalam 6 bulan** setelah implementasi dibanding periode 6 bulan sebelum implementasi.\n   - Data sumber: transaksi barang keluar dengan alasan kehilangan dan laporan aset.\n\n### KPI Operasional\n\n2. **Kelengkapan data aset**\n   - Target: **100% aset aktif** memiliki kode aset, nama aset, kategori, lokasi, stok, kondisi, dan status ketersediaan.\n\n3. **Transaksi peminjaman tercatat**\n   - Target: **100% peminjaman aset** dilakukan melalui sistem dan memiliki status transaksi.\n\n4. **Approval tercatat**\n   - Target: **100% pengajuan peminjaman** memiliki keputusan Admin: disetujui atau ditolak.\n\n5. **Pengembalian tercatat**\n   - Target: **100% transaksi Dipinjam** memiliki waktu pengembalian aktual atau masih tercatat sebagai transaksi aktif.\n\n6. **Audit log coverage**\n   - Target: **100% perubahan data aset, stok, lokasi, status, dan transaksi** tercatat di audit log.\n\n7. **Kecepatan pencarian aset**\n   - Target: Staff dapat menemukan aset tersedia dalam waktu maksimal **30 detik** melalui pencarian/filter.\n\n8. **Adopsi Admin**\n   - Target: minimal **90% aktivitas pengelolaan aset** dilakukan melalui BSGAsset dalam 1 bulan pertama setelah go-live.\n\n9. **SLA performa halaman utama**\n   - Target: halaman daftar aset dan dashboard load di bawah **3 detik** untuk 95% request pada skala awal.\n\n---\n\n## 11. Dependencies & Constraints\n\n### Dependencies\n\n1. **Auth system**\n   - Sistem autentikasi sudah tersedia (`auth_ready: true`).\n   - BSGAsset bergantung pada data user dan role dari auth system.\n\n2. **Database PostgreSQL**\n   - Semua data aset, transaksi, audit log, notifikasi, dan laporan disimpan di PostgreSQL.\n\n3. **Next.js frontend dan backend**\n   - Frontend menggunakan Next.js.\n   - Backend menggunakan Next.js Route Handlers.\n\n4. **SSE untuk realtime**\n   - Notifikasi realtime menggunakan Server-Sent Events.\n   - SSE hanya untuk delivery realtime, bukan sumber kebenaran data.\n\n5. **Input data manual**\n   - Data aset lama dari Excel/Google Sheet dimigrasikan melalui input manual oleh Admin.\n\n### Constraints\n\n1. **Deadline <1 bulan**\n   - Scope MVP harus fokus pada fitur P0.\n   - Fitur P1/P2 dapat dikerjakan jika masih ada waktu setelah P0 stabil.\n\n2. **Skala awal kecil**\n   - Sistem didesain untuk <100 aset dan <20 user pada fase awal.\n   - Namun struktur data tetap dibuat rapi agar bisa berkembang.\n\n3. **Semua peminjaman wajib approval**\n   - Tidak ada auto-approve pada versi ini.\n\n4. **Lokasi aset input manual**\n   - “Real-time location” dalam konteks MVP berarti lokasi terkini yang dicatat manual di sistem, bukan tracking fisik otomatis.\n\n5. **Notifikasi MVP hanya in-app**\n   - Klarifikasi menyebut WhatsApp/Telegram dan juga “di dalam aplikasi saja”.\n   - Untuk MVP, notifikasi dikunci ke in-app agar sesuai deadline <1 bulan.\n\n6. **Laporan**\n   - PDF digunakan untuk manajemen.\n   - Dashboard tersedia untuk ringkasan.\n   - Excel/CSV digunakan untuk Admin.\n\n---\n\n## 12. Keputusan Final (dikunci untuk MVP)\n\nSemua poin di bawah ini adalah keputusan final agar AI agent tidak perlu menebak atau meminta klarifikasi ulang.\n\n1. **Manajemen tidak memiliki role login khusus di MVP**\n   - Laporan untuk manajemen dibuat atau diekspor oleh Admin dalam format PDF.\n\n2. **“Real-time lokasi” berarti lokasi terkini yang dicatat manual di sistem**\n   - Tidak ada tracking fisik otomatis pada MVP.\n\n3. **Notifikasi MVP hanya in-app**\n   - WhatsApp/Telegram masuk P2, bukan MVP.\n\n4. **Aset hilang dicatat melalui transaksi barang keluar**\n   - Alasan barang keluar wajib menyediakan opsi `Hilang`.\n   - Jika perlu, Admin dapat menandai aset menjadi `Tidak Aktif` setelah kasus selesai.\n\n5. **Model aset yang dipakai adalah hybrid**\n   - Aset bernilai tinggi atau unit unik memakai **kode aset unik per unit**.\n   - Aset yang memang dikelola sebagai stok memakai **jumlah stok** pada satu record aset.\n\n6. **Import otomatis dari Excel/CSV tidak termasuk MVP**\n   - Data awal diinput manual oleh Admin.\n\n7. **Satu transaksi peminjaman hanya untuk satu aset**\n   - Jika nanti dibutuhkan multi-aset, itu masuk enhancement setelah MVP.\n\n8. **Minimum stok dihitung per aset**\n   - Bukan global per kategori.\n\n9. **Lampiran foto kondisi aset tidak wajib di MVP**\n   - Boleh ditambahkan belakangan sebagai enhancement.\n\n10. **Template laporan tidak memakai format perusahaan khusus di MVP**\n    - Gunakan format standar yang mudah dibaca manajemen.\n\n11. **Staff boleh membatalkan pengajuan sendiri hanya sebelum approval**\n    - Setelah approval, pembatalan hanya bisa dilakukan Admin.\n\n12. **Kategori aset non-IT tetap boleh dipakai**\n    - Selama masih bisa dimodelkan sebagai aset unik atau aset stok.\n\n13. **Timezone default adalah Asia/Jakarta**\n    - Kecuali tim menyepakati timezone lain.\n\n14. **Role user dibaca dari sistem auth yang sudah tersedia**\n    - BSGAsset tidak mendefinisikan sistem auth baru.\n\n---\n\n## 13. Milestone / Prioritas Rilis\n\n### Rilis MVP — Target <1 bulan\n\n#### Week 1: Foundation & Data Master\n\nFitur:\n\n- Setup project Next.js frontend/backend.\n- Setup PostgreSQL schema.\n- Integrasi auth dan role access.\n- Modul manajemen aset.\n- Modul lokasi aset.\n- Input manual data aset awal.\n- Audit log dasar untuk create/update/delete aset.\n\nPrioritas:\n\n- P0 Autentikasi & role access.\n- P0 Manajemen aset.\n- P0 Lokasi aset.\n- P0 Input manual data awal.\n- P0 Audit log dasar.\n\n---\n\n#### Week 2: Workflow Peminjaman\n\nFitur:\n\n- Staff melihat daftar aset tersedia.\n- Staff mengajukan peminjaman.\n- Admin approval/penolakan.\n- Admin mencatat waktu pengambilan.\n- Status aset otomatis menjadi Dipinjam.\n- Riwayat transaksi dasar.\n\nPrioritas:\n\n- P0 Pengajuan peminjaman.\n- P0 Approval peminjaman.\n- P0 Pengambilan aset.\n- P0 Riwayat peminjaman.\n\n---\n\n#### Week 3: Workflow Pengembalian, Stok, Notifikasi\n\nFitur:\n\n- Staff mengajukan pengembalian.\n- Admin memeriksa kondisi aset.\n- Status aset menjadi Tersedia atau Rusak.\n- Barang masuk dan barang keluar.\n- Minimum stok dan notifikasi stok menipis.\n- Notifikasi in-app menggunakan SSE.\n- Audit log lengkap untuk transaksi.\n\nPrioritas:\n\n- P0 Pengembalian aset.\n- P0 Barang masuk/keluar.\n- P0 Notifikasi in-app.\n- P0 Audit log transaksi.\n\n---\n\n#### Week 4: Dashboard, Laporan, Hardening, UAT\n\nFitur:\n\n- Dashboard Admin dasar.\n- Filter laporan berdasarkan tanggal/status.\n- Export CSV/Excel untuk Admin.\n- Export PDF untuk manajemen jika waktu memungkinkan.\n- Testing role access.\n- Testing edge cases.\n- UAT dengan Admin dan Staff.\n- Bug fixing.\n\nPrioritas:\n\n- P0 Dashboard dasar.\n- P1 Export PDF.\n- P1 Export Excel/CSV.\n- P1 Filter laporan lengkap berdasarkan lokasi/kategori/status/tanggal.\n\n---\n\n### Prioritas P0\n\n- Autentikasi dan role access.\n- CRUD aset.\n- Lokasi aset manual.\n- Input manual data awal.\n- Pengajuan peminjaman.\n- Approval Admin wajib.\n- Pencatatan pengambilan.\n- Pengembalian dan pemeriksaan kondisi.\n- Status aset otomatis.\n- Riwayat peminjaman.\n- Barang masuk/keluar.\n- Audit log wajib.\n- Notifikasi in-app dasar.\n- Dashboard Admin dasar.\n\n### Prioritas P1\n\n- Kategori aset CRUD.\n- Export PDF untuk manajemen.\n- Export Excel/CSV untuk Admin.\n- Filter laporan lengkap.\n- Peningkatan tampilan dashboard.\n- Pagination dan advanced filter audit log.\n\n### Prioritas P2\n\n- Integrasi WhatsApp/Telegram.\n- Scan QR/barcode.\n- Import Excel/CSV.\n- Lampiran foto kondisi aset.\n- Workflow perbaikan aset.\n- Role Manajemen terpisah.\n- Mobile app native.\n- Integrasi ERP/accounting.\n\n---\n\n## 14. Catatan Konsistensi Final\n\nAudit konsistensi internal sudah dilakukan dan seluruh keputusan ambigu sudah dikunci untuk MVP.\n\n### 14.1 Notifikasi\n\n- MVP menggunakan **notifikasi in-app saja**.\n- WhatsApp/Telegram tetap ada di roadmap P2.\n\n### 14.2 Model aset\n\n- Aset bernilai tinggi memakai **kode aset unik per unit**.\n- Aset stok memakai **jumlah stok** pada record yang sama.\n- Ini adalah model hybrid final yang dipakai oleh agent.\n\n### 14.3 Transaksi peminjaman\n\n- **Satu transaksi hanya untuk satu aset**.\n- Multi-aset adalah enhancement setelah MVP.\n\n### 14.4 Aset hilang\n\n- Aset hilang dicatat lewat barang keluar dengan alasan `Hilang`.\n- Jika perlu, Admin dapat menonaktifkan aset setelah proses investigasi selesai.\n\n### 14.5 Open question yang sudah ditutup\n\n- Staff boleh membatalkan pengajuan sendiri hanya sebelum approval.\n- Minimum stok dihitung per aset.\n- Foto kondisi aset tidak wajib di MVP.\n- Template laporan menggunakan format standar, bukan template khusus perusahaan.\n\n## 15. Agent Execution Brief\n\nBagian ini ditulis khusus agar AI agent langsung bisa mengeksekusi tanpa perlu interpretasi tambahan.\n\n### Aturan keras\n\n- Jangan meminta klarifikasi untuk keputusan yang sudah dikunci di section 12 dan 14.\n- Terapkan role access ketat: Admin penuh, Staff terbatas.\n- Pertahankan model transaksi satu aset per transaksi.\n- Gunakan in-app notification saja pada MVP.\n- Semua perubahan data penting harus masuk audit log.\n- Jangan menambahkan QR/barcode, WhatsApp/Telegram, mobile app native, atau integrasi ERP/accounting ke MVP.\n- Jika ada konflik antara narasi umum dan keputusan final, ikuti keputusan final.\n\n### Urutan implementasi yang disarankan\n\n1. Auth dan role access.\n2. Master aset dan lokasi.\n3. Pengajuan pinjam, approval, pengambilan.\n4. Pengembalian, pemeriksaan kondisi, status aset.\n5. Barang masuk/keluar dan notifikasi stok menipis.\n6. Riwayat, laporan, audit log, export.\n7. Hardening, validation, dan edge cases.\n\n### Output yang harus dianggap selesai\n\n- Admin bisa mengelola aset dan lokasi.\n- Staff bisa ajukan pinjam dan pengembalian.\n- Approval dan pengambilan berjalan benar.\n- Status aset berubah otomatis sesuai transaksi.\n- Notifikasi stok menipis muncul in-app.\n- Laporan dan audit log dapat dipakai tanpa penjelasan tambahan.\n",
+    "clarification_log": {
+      "answers": {
+        "q1": {
+          "text": "",
+          "selected": [
+            "<100 aset, <20 user"
+          ]
+        },
+        "q2": {
+          "text": "",
+          "selected": [
+            "Excel/Google Sheet",
+            "Belum ada sistem"
+          ]
+        },
+        "q3": {
+          "text": "",
+          "selected": [
+            "Ya, input manual"
+          ]
+        },
+        "q4": {
+          "text": "",
+          "selected": [
+            "Semua wajib approval"
+          ]
+        },
+        "q5": {
+          "text": "",
+          "selected": [
+            "Input manual"
+          ]
+        },
+        "q6": {
+          "text": "",
+          "selected": [
+            "WhatsApp/Telegram",
+            "Di dalam aplikasi saja"
+          ]
+        },
+        "q7": {
+          "text": "",
+          "selected": [
+            "PDF untuk manajemen",
+            "Dashboard saja",
+            "Excel/CSV untuk admin"
+          ]
+        },
+        "q8": {
+          "text": "",
+          "selected": [
+            "Ya, wajib"
+          ]
+        },
+        "q9": {
+          "text": "",
+          "selected": [
+            "Aset sering hilang"
+          ]
+        },
+        "q10": {
+          "text": "",
+          "selected": [
+            "Lebih sederhana"
+          ]
+        },
+        "q11": {
+          "text": "",
+          "selected": [
+            "Penurunan aset hilang"
+          ]
+        },
+        "q12": {
+          "text": "",
+          "selected": [
+            "Tech stack sudah fix",
+            "Deadline <1 bulan"
+          ]
+        },
+        "q13": {
+          "text": "",
+          "selected": [
+            "Semua fitur harus ada"
+          ]
+        }
+      },
+      "questions": [
+        {
+          "id": "q1",
+          "why": "Skala penggunaan menentukan kebutuhan performa, struktur database, pagination, pencarian, dan prioritas fitur bulk import/export.",
+          "category": "specific",
+          "question": "Berapa skala penggunaan awal BSGAsset: jumlah aset, jumlah Staff, dan jumlah Admin yang akan memakai sistem?",
+          "quick_replies": [
+            "<100 aset, <20 user",
+            "100-1.000 aset, 20-100 user",
+            ">1.000 aset, >100 user",
+            "Belum tahu"
+          ]
+        },
+        {
+          "id": "q2",
+          "why": "Mengetahui proses lama membantu menentukan fitur migrasi, alur approval, serta masalah utama yang harus diselesaikan MVP.",
+          "category": "specific",
+          "question": "Workflow existing saat ini mengelola aset memakai apa, dan pain point terbesarnya apa?",
+          "quick_replies": [
+            "Excel/Google Sheet",
+            "Form kertas/manual",
+            "Sudah ada aplikasi lama",
+            "Belum ada sistem"
+          ]
+        },
+        {
+          "id": "q3",
+          "why": "Migrasi data memengaruhi scope fitur seperti import Excel/CSV, validasi data, mapping kategori/lokasi, dan cleansing data.",
+          "category": "specific",
+          "question": "Apakah data aset lama perlu dimigrasikan ke BSGAsset saat pertama kali digunakan?",
+          "quick_replies": [
+            "Ya, import Excel/CSV",
+            "Ya, input manual",
+            "Tidak perlu",
+            "Belum diputuskan"
+          ]
+        },
+        {
+          "id": "q4",
+          "why": "Aturan approval menentukan state transaksi, notifikasi, permission, dan desain workflow peminjaman.",
+          "category": "specific",
+          "question": "Apakah setiap peminjaman aset wajib melalui approval Admin, atau ada aset tertentu yang bisa langsung dipinjam tanpa approval?",
+          "quick_replies": [
+            "Semua wajib approval",
+            "Sebagian bisa langsung",
+            "Tergantung kategori aset",
+            "Belum tahu"
+          ]
+        },
+        {
+          "id": "q5",
+          "why": "Klaim lokasi real-time bisa sangat berbeda scope teknisnya; perlu dipastikan agar PRD tidak ambigu.",
+          "category": "specific",
+          "question": "Bagaimana sistem menentukan lokasi aset secara real-time: diinput manual oleh Admin/Staff, memakai scan barcode/QR, atau integrasi hardware tracking?",
+          "quick_replies": [
+            "Input manual",
+            "Scan QR/barcode",
+            "Integrasi GPS/RFID",
+            "Belum ditentukan"
+          ]
+        },
+        {
+          "id": "q6",
+          "why": "Kebutuhan notifikasi memengaruhi integrasi, konfigurasi threshold stok, dan role penerima alert.",
+          "category": "specific",
+          "question": "Notifikasi stok menipis dikirim melalui kanal apa, dan siapa penerimanya?",
+          "quick_replies": [
+            "Di dalam aplikasi saja",
+            "Email ke Admin",
+            "WhatsApp/Telegram",
+            "Belum perlu di MVP"
+          ]
+        },
+        {
+          "id": "q7",
+          "why": "Format dan audiens laporan menentukan field, filter, layout, dan kebutuhan export atau print.",
+          "category": "specific",
+          "question": "Laporan perlu bisa diekspor dalam format apa dan untuk siapa laporan tersebut digunakan?",
+          "quick_replies": [
+            "PDF untuk manajemen",
+            "Excel/CSV untuk admin",
+            "Dashboard saja",
+            "Belum tahu"
+          ]
+        },
+        {
+          "id": "q8",
+          "why": "Audit log penting untuk accountability pada sistem aset, tetapi menambah scope database dan tampilan riwayat perubahan.",
+          "category": "specific",
+          "question": "Apakah dibutuhkan audit log untuk mencatat siapa yang mengubah data aset, status, stok, atau transaksi?",
+          "quick_replies": [
+            "Ya, wajib",
+            "Hanya perubahan penting",
+            "Tidak perlu dulu",
+            "Belum diputuskan"
+          ]
+        },
+        {
+          "id": "q9",
+          "why": "Ini membantu menetapkan fokus produk dan prioritas fitur agar MVP tidak melebar.",
+          "category": "universal",
+          "question": "Masalah utama apa yang paling ingin diselesaikan oleh BSGAsset, dan siapa yang paling merasakan masalah ini?",
+          "quick_replies": [
+            "Aset sering hilang",
+            "Riwayat peminjaman tidak jelas",
+            "Stok/lokasi sulit dipantau",
+            "Laporan aset lambat dibuat"
+          ]
+        },
+        {
+          "id": "q10",
+          "why": "Diferensiasi membantu menentukan value proposition dan fitur yang benar-benar penting.",
+          "category": "universal",
+          "question": "Jika sudah ada solusi atau kompetitor, apa yang membuat BSGAsset harus berbeda atau lebih baik?",
+          "quick_replies": [
+            "Lebih sederhana",
+            "Lebih murah",
+            "Lebih cocok workflow internal",
+            "Belum bandingkan kompetitor"
+          ]
+        },
+        {
+          "id": "q11",
+          "why": "Metrik sukses akan menjadi acuan prioritas fitur, evaluasi MVP, dan target implementasi.",
+          "category": "universal",
+          "question": "Jika harus memilih satu metrik utama untuk menilai BSGAsset berhasil, metrik apa yang paling tepat?",
+          "quick_replies": [
+            "Penurunan aset hilang",
+            "Kecepatan proses peminjaman",
+            "Akurasi data aset",
+            "Jumlah transaksi tercatat"
+          ]
+        },
+        {
+          "id": "q12",
+          "why": "Batasan ini menentukan pendekatan teknis, prioritas MVP, dan estimasi delivery.",
+          "category": "universal",
+          "question": "Apakah ada batasan waktu, budget, atau tech stack yang sudah ditentukan untuk pengembangan BSGAsset?",
+          "quick_replies": [
+            "Deadline <1 bulan",
+            "Deadline 1-3 bulan",
+            "Tech stack sudah fix",
+            "Belum ada batasan"
+          ]
+        },
+        {
+          "id": "q13",
+          "why": "Memisahkan fitur wajib dan tambahan membantu membuat scope MVP yang realistis.",
+          "category": "universal",
+          "question": "Untuk versi pertama, fitur mana yang wajib ada, dan mana yang boleh menyusul setelah MVP?",
+          "quick_replies": [
+            "CRUD aset + peminjaman",
+            "Laporan + export wajib",
+            "Notifikasi wajib",
+            "Semua fitur harus ada"
+          ]
+        }
+      ]
+    },
+    "created_at": "2026-07-12T17:04:17.841Z",
+    "updated_at": "2026-07-12T17:12:53.941Z"
+  },
+  "features": [
+    {
+      "title": "Autentikasi dan Role Access",
+      "description": "Sistem menggunakan autentikasi yang sudah tersedia dan membatasi akses berdasarkan role Admin dan Staff.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "User tanpa login tidak dapat mengakses aplikasi.",
+        "Admin dapat membuka menu aset, lokasi, transaksi, laporan, notifikasi, dan audit log.",
+        "Staff hanya dapat membuka daftar aset tersedia, pengajuan peminjaman, pengembalian, dan riwayat pribadi.",
+        "Request API dari Staff ke endpoint Admin ditolak dengan status 403.",
+        "Request tanpa autentikasi ditolak dengan status 401."
+      ],
+      "status": "todo",
+      "order": 0,
+      "sub_features": [
+        {
+          "title": "Integrasi Auth Existing",
+          "description": "Menggunakan sistem auth yang sudah siap untuk mengenali user login dan role pengguna.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xsaj008rm01y6y7invpz",
+              "title": "Integrasikan session auth ke aplikasi Next.js",
+              "description": "Hubungkan aplikasi Next.js dengan auth system yang sudah tersedia untuk membaca identitas user aktif pada halaman dan Route Handlers.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xrro008pm01y5a3678oe"
+            },
+            {
+              "id": "cmri1xsrl008tm01yxt0iu0jz",
+              "title": "Ambil dan validasi role user",
+              "description": "Buat mekanisme server-side untuk membaca role Admin atau Staff dari auth system dan memastikan role tersedia sebelum user mengakses modul.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xrro008pm01y5a3678oe"
+            },
+            {
+              "id": "cmri1xszl008vm01yhkpnozgb",
+              "title": "Lindungi halaman dari akses tanpa login",
+              "description": "Tambahkan guard pada route aplikasi agar user tanpa session valid diarahkan ke halaman login atau ditolak aksesnya.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xrro008pm01y5a3678oe"
+            }
+          ]
+        },
+        {
+          "title": "Role-Based Access Control",
+          "description": "Membatasi menu, halaman, aksi UI, dan endpoint API sesuai role Admin atau Staff.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xtfv008zm01yx5tdyfws",
+              "title": "Buat middleware validasi autentikasi dan role",
+              "description": "Implementasikan middleware atau helper server-side untuk menolak request tanpa autentikasi dengan 401 dan request role tidak sesuai dengan 403.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xt7m008xm01y5w17ekdt"
+            },
+            {
+              "id": "cmri1xtnw0091m01yin86e1mp",
+              "title": "Batasi menu navigasi berdasarkan role",
+              "description": "Tampilkan menu aset, lokasi, transaksi, laporan, notifikasi, dan audit log untuk Admin, serta menu daftar aset tersedia, pengajuan, pengembalian, dan riwayat pribadi untuk Staff.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xt7m008xm01y5w17ekdt"
+            },
+            {
+              "id": "cmri1xtvu0093m01yrd42h9ig",
+              "title": "Amankan endpoint Admin",
+              "description": "Tambahkan validasi role Admin pada seluruh Next.js Route Handlers untuk CRUD aset, lokasi, stok, approval, laporan, notifikasi admin, dan audit log.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xt7m008xm01y5w17ekdt"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Manajemen Aset",
+      "description": "Admin dapat mengelola data master aset secara terpusat, sementara Staff hanya dapat melihat aset yang tersedia.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat membuat aset baru dengan field minimal kode aset, nama aset, kategori, lokasi penyimpanan, jumlah stok, kondisi, status ketersediaan, dan minimum stok.",
+        "Sistem menolak pembuatan aset dengan kode aset duplikat.",
+        "Admin dapat mengubah data aset dan setiap perubahan tercatat di audit log.",
+        "Admin dapat menghapus atau menonaktifkan aset hanya jika aset tidak sedang dipinjam.",
+        "Aset Rusak atau Dipinjam tidak muncul sebagai aset yang bisa dipinjam Staff."
+      ],
+      "status": "todo",
+      "order": 1,
+      "sub_features": [
+        {
+          "title": "CRUD Data Aset Admin",
+          "description": "Admin dapat membuat, melihat, mengubah, dan menghapus atau menonaktifkan data aset.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xuk00099m01yoesadmse",
+              "title": "Buat schema PostgreSQL untuk aset",
+              "description": "Definisikan tabel aset dengan kolom kode aset unik, nama aset, kategori, lokasi, jumlah stok, minimum stok, kondisi, status ketersediaan, created_at, dan updated_at.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xuc00097m01yu6s2rqct"
+            },
+            {
+              "id": "cmri1xus1009bm01ye0yo38dh",
+              "title": "Buat form input dan edit aset dengan validasi lengkap",
+              "description": "Implementasikan form Admin dengan validasi field wajib, validasi kode aset unik, validasi jumlah stok tidak negatif, pilihan kondisi Baik/Rusak, dan pilihan status aset.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xuc00097m01yu6s2rqct"
+            },
+            {
+              "id": "cmri1xv02009dm01yghnijfoe",
+              "title": "Buat endpoint CRUD aset untuk Admin",
+              "description": "Implementasikan Next.js Route Handlers untuk create, read, update, dan delete atau soft delete aset dengan validasi role Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xuc00097m01yu6s2rqct"
+            },
+            {
+              "id": "cmri1xv8c009fm01yp6jc5bmx",
+              "title": "Cegah penghapusan aset yang sedang dipinjam",
+              "description": "Tambahkan pengecekan status aset atau transaksi aktif sebelum penghapusan dan tampilkan pesan error jika aset sedang dipinjam.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xuc00097m01yu6s2rqct"
+            }
+          ]
+        },
+        {
+          "title": "Daftar dan Detail Aset",
+          "description": "Menampilkan daftar aset sesuai hak akses pengguna.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xvog009jm01yb238w4g7",
+              "title": "Buat halaman daftar aset untuk Admin",
+              "description": "Tampilkan seluruh aset beserta kode, nama, kategori, lokasi, stok, kondisi, status, dan aksi edit atau hapus untuk Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xvgf009hm01y9uz4jtdv"
+            },
+            {
+              "id": "cmri1xvwg009lm01ytjad2mtg",
+              "title": "Buat halaman detail aset",
+              "description": "Tampilkan informasi detail aset, status ketersediaan, lokasi penyimpanan, kondisi, stok, dan riwayat terkait sesuai hak akses pengguna.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xvgf009hm01y9uz4jtdv"
+            },
+            {
+              "id": "cmri1xw4f009nm01yuys092wn",
+              "title": "Sembunyikan aksi edit dan hapus dari Staff",
+              "description": "Pastikan Staff tidak melihat tombol create, edit, hapus, atau perubahan stok pada daftar dan detail aset.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xvgf009hm01y9uz4jtdv"
+            }
+          ]
+        },
+        {
+          "title": "Status Aset Otomatis",
+          "description": "Status aset berubah otomatis berdasarkan workflow peminjaman dan pengembalian.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xwkh009rm01yhcgri97x",
+              "title": "Implementasikan enum status dan kondisi aset",
+              "description": "Tambahkan validasi status Tersedia, Dipinjam, Rusak, Tidak Aktif dan kondisi Baik atau Rusak pada database dan backend.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xwcg009pm01yuguhamc6"
+            },
+            {
+              "id": "cmri1xwsh009tm01y42zgrbbw",
+              "title": "Update status aset saat pengambilan",
+              "description": "Saat Admin mencatat pengambilan pada transaksi disetujui, ubah status aset menjadi Dipinjam dalam transaksi database.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xwcg009pm01yuguhamc6"
+            },
+            {
+              "id": "cmri1xx0j009vm01yvnpmt7t1",
+              "title": "Update status aset saat pengembalian",
+              "description": "Saat Admin menyelesaikan pemeriksaan pengembalian, ubah status aset menjadi Tersedia jika Baik atau Rusak jika kondisi akhir Rusak.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xwcg009pm01yuguhamc6"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Input Manual Data Awal",
+      "description": "Admin dapat memasukkan data aset lama satu per satu secara manual tanpa import otomatis.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat menyelesaikan input aset manual tanpa bantuan teknis.",
+        "Validasi field wajib tersedia pada form input aset.",
+        "Sistem menampilkan error jika data tidak valid.",
+        "Data aset yang sudah diinput langsung muncul di daftar aset.",
+        "Tidak ada kewajiban import otomatis dari Excel atau Google Sheet pada MVP."
+      ],
+      "status": "todo",
+      "order": 2,
+      "sub_features": [
+        {
+          "title": "Form Input Data Aset Awal",
+          "description": "Form sederhana untuk memasukkan data aset awal dengan skala kurang dari 100 aset.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xxov00a1m01yisqdkvle",
+              "title": "Buat form input aset awal yang sederhana",
+              "description": "Sediakan form dengan field kode aset, nama aset, kategori, lokasi, jumlah stok, minimum stok, kondisi, dan status agar Admin dapat memasukkan aset satu per satu.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xxgu009zm01yf5syatdo"
+            },
+            {
+              "id": "cmri1xxww00a3m01y5x6b96p1",
+              "title": "Tambahkan validasi field wajib dan format data",
+              "description": "Validasi kode aset, nama aset, kategori, lokasi, stok, kondisi, dan status sebelum data dikirim ke backend.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xxgu009zm01yf5syatdo"
+            },
+            {
+              "id": "cmri1xy4w00a5m01yxvxld8tv",
+              "title": "Tampilkan pesan error spesifik per field",
+              "description": "Tampilkan pesan seperti kode aset wajib diisi, kode aset sudah digunakan, atau jumlah stok tidak valid ketika input gagal.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xxgu009zm01yf5syatdo"
+            },
+            {
+              "id": "cmri1xycw00a7m01yzeirsrti",
+              "title": "Refresh daftar aset setelah input berhasil",
+              "description": "Pastikan aset baru langsung terlihat pada daftar aset tanpa perlu proses teknis tambahan dari Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xxgu009zm01yf5syatdo"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Lokasi Aset Manual",
+      "description": "Admin dapat mengelola lokasi penyimpanan aset secara manual dan menggunakannya pada data aset serta laporan.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat membuat, mengubah, dan menghapus data lokasi.",
+        "Admin dapat mengubah lokasi penyimpanan aset.",
+        "Sistem menolak penghapusan lokasi yang masih digunakan aset aktif.",
+        "Perubahan lokasi tercatat di audit log.",
+        "Staff hanya dapat melihat lokasi aset dan tidak dapat mengubahnya."
+      ],
+      "status": "todo",
+      "order": 3,
+      "sub_features": [
+        {
+          "title": "CRUD Lokasi",
+          "description": "Admin dapat mengelola data master lokasi penyimpanan aset.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1xz0t00adm01yyj5m2i2n",
+              "title": "Buat schema PostgreSQL untuk lokasi aset",
+              "description": "Definisikan tabel lokasi dengan nama lokasi, deskripsi opsional, status aktif, created_at, dan updated_at.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xyst00abm01ykkh85ifu"
+            },
+            {
+              "id": "cmri1xzgs00afm01yy7r08ngu",
+              "title": "Buat halaman manajemen lokasi untuk Admin",
+              "description": "Sediakan daftar lokasi dengan aksi tambah, edit, dan hapus yang hanya dapat diakses Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xyst00abm01ykkh85ifu"
+            },
+            {
+              "id": "cmri1xzos00ahm01yjydhthb8",
+              "title": "Buat endpoint CRUD lokasi dengan validasi role",
+              "description": "Implementasikan Route Handlers untuk membuat, mengubah, menghapus, dan mengambil lokasi dengan proteksi role Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xyst00abm01ykkh85ifu"
+            },
+            {
+              "id": "cmri1xzws00ajm01ynjgtle0j",
+              "title": "Cegah penghapusan lokasi yang masih digunakan",
+              "description": "Tambahkan pengecekan relasi aset aktif sebelum lokasi dihapus dan tampilkan pesan error jika masih digunakan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1xyst00abm01ykkh85ifu"
+            }
+          ]
+        },
+        {
+          "title": "Perubahan Lokasi Aset",
+          "description": "Admin dapat memperbarui lokasi penyimpanan aset yang tercatat di sistem.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y0cw00anm01yb2814vmq",
+              "title": "Tambahkan pilihan lokasi pada form aset",
+              "description": "Sediakan dropdown lokasi aktif pada form tambah dan edit aset agar Admin dapat menentukan lokasi penyimpanan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y04s00alm01yvlxhh7tw"
+            },
+            {
+              "id": "cmri1y0kw00apm01yy0lmha17",
+              "title": "Catat perubahan lokasi ke audit log",
+              "description": "Saat lokasi aset berubah, simpan nilai lokasi sebelum dan sesudah beserta user, role, aksi, entity_id, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y04s00alm01yvlxhh7tw"
+            },
+            {
+              "id": "cmri1y0sw00arm01yaxyn5qxr",
+              "title": "Tampilkan lokasi pada daftar aset Staff",
+              "description": "Pastikan Staff dapat melihat lokasi aset tersedia tanpa memiliki akses untuk mengubah lokasi tersebut.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y04s00alm01yvlxhh7tw"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Kategori Aset CRUD",
+      "description": "Admin dapat mengelola kategori aset seperti Laptop, Komputer, Printer, Proyektor, atau kategori lain.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "Admin dapat membuat kategori aset.",
+        "Admin dapat mengubah nama kategori aset.",
+        "Sistem menolak penghapusan kategori yang masih digunakan oleh aset.",
+        "Staff dapat memfilter aset berdasarkan kategori.",
+        "Laporan dapat difilter berdasarkan kategori."
+      ],
+      "status": "todo",
+      "order": 4,
+      "sub_features": [
+        {
+          "title": "Manajemen Kategori",
+          "description": "CRUD kategori aset untuk kebutuhan klasifikasi, filter aset, dan filter laporan.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y1h800axm01yzz5pub7w",
+              "title": "Buat schema PostgreSQL untuk kategori aset",
+              "description": "Definisikan tabel kategori dengan nama kategori unik, status aktif, created_at, dan updated_at.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y18x00avm01yqfrzdn7p"
+            },
+            {
+              "id": "cmri1y1p600azm01y7fid1eog",
+              "title": "Buat halaman CRUD kategori untuk Admin",
+              "description": "Sediakan halaman Admin untuk menambah, mengubah, dan menghapus kategori aset dengan validasi nama kategori.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y18x00avm01yqfrzdn7p"
+            },
+            {
+              "id": "cmri1y1x900b1m01yy9byqr63",
+              "title": "Cegah penghapusan kategori yang sedang digunakan",
+              "description": "Tambahkan pengecekan relasi aset sebelum kategori dihapus dan tampilkan pesan error jika kategori masih dipakai.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y18x00avm01yqfrzdn7p"
+            },
+            {
+              "id": "cmri1y25a00b3m01y75nnqgqi",
+              "title": "Hubungkan kategori ke filter aset dan laporan",
+              "description": "Gunakan kategori sebagai pilihan filter pada daftar aset Staff, daftar aset Admin, dan laporan lengkap.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y18x00avm01yqfrzdn7p"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Barang Masuk dan Barang Keluar",
+      "description": "Admin dapat mencatat penambahan dan pengurangan stok aset beserta riwayat perubahannya.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat memilih aset dan menambahkan jumlah stok dengan nilai lebih dari 0.",
+        "Admin dapat memilih aset dan mengurangi stok dengan nilai lebih dari 0 serta wajib mengisi alasan barang keluar.",
+        "Sistem menolak barang keluar jika jumlah keluar lebih besar dari stok tersedia.",
+        "Sistem mencatat tanggal, jumlah, Admin pencatat, dan catatan atau alasan transaksi.",
+        "Setiap perubahan stok tercatat di audit log."
+      ],
+      "status": "todo",
+      "order": 5,
+      "sub_features": [
+        {
+          "title": "Pencatatan Barang Masuk",
+          "description": "Admin mencatat stok masuk agar jumlah stok aset bertambah dan terdokumentasi.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y2tc00b9m01yx1qy0nwf",
+              "title": "Buat schema transaksi stok",
+              "description": "Definisikan tabel transaksi stok dengan aset, tipe transaksi masuk atau keluar, jumlah, tanggal, user pencatat, alasan atau catatan, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y2la00b7m01yjxeyeh8o"
+            },
+            {
+              "id": "cmri1y31d00bbm01ycsmigi7n",
+              "title": "Buat form barang masuk dengan validasi jumlah",
+              "description": "Sediakan form untuk memilih aset, mengisi jumlah masuk lebih dari 0, dan catatan opsional.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y2la00b7m01yjxeyeh8o"
+            },
+            {
+              "id": "cmri1y39d00bdm01y9gfare0l",
+              "title": "Update stok aset saat barang masuk",
+              "description": "Tambahkan stok aset sesuai jumlah barang masuk menggunakan transaksi database agar data stok dan riwayat konsisten.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y2la00b7m01yjxeyeh8o"
+            }
+          ]
+        },
+        {
+          "title": "Pencatatan Barang Keluar",
+          "description": "Admin mencatat pengurangan stok untuk penghapusan, kehilangan, rusak berat, atau alasan operasional lain.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y3qy00bhm01yzs3sg3gy",
+              "title": "Buat form barang keluar dengan alasan wajib",
+              "description": "Sediakan form untuk memilih aset, mengisi jumlah keluar lebih dari 0, dan memilih atau menulis alasan barang keluar termasuk opsi Hilang.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y3hf00bfm01ylu757hhd"
+            },
+            {
+              "id": "cmri1y3zh00bjm01ynlklk91b",
+              "title": "Validasi stok tersedia sebelum barang keluar",
+              "description": "Cek stok aset saat submit dan tolak transaksi jika jumlah keluar melebihi stok tersedia agar stok tidak menjadi negatif.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y3hf00bfm01ylu757hhd"
+            },
+            {
+              "id": "cmri1y48100blm01ylwe1t9rc",
+              "title": "Update stok dan simpan riwayat barang keluar",
+              "description": "Kurangi stok aset sesuai input dan simpan tanggal, jumlah, Admin pencatat, serta alasan dalam satu transaksi database.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y3hf00bfm01ylu757hhd"
+            }
+          ]
+        },
+        {
+          "title": "Riwayat Stok",
+          "description": "Admin dapat melihat riwayat perubahan stok aset.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y4p300bpm01y8votkxun",
+              "title": "Buat halaman riwayat stok untuk Admin",
+              "description": "Tampilkan daftar barang masuk dan barang keluar dengan aset, tanggal, jumlah, tipe transaksi, pencatat, dan alasan atau catatan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y4gk00bnm01y5a26o6wk"
+            },
+            {
+              "id": "cmri1y4xm00brm01ypjbsa33h",
+              "title": "Tambahkan filter riwayat stok",
+              "description": "Sediakan filter berdasarkan aset, tipe transaksi, tanggal, dan alasan agar Admin dapat menelusuri perubahan stok.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y4gk00bnm01y5a26o6wk"
+            },
+            {
+              "id": "cmri1y56500btm01yr82lr5ju",
+              "title": "Catat perubahan stok ke audit log",
+              "description": "Setiap transaksi stok masuk atau keluar harus membuat audit log berisi stok sebelum dan sesudah, user, aksi, entitas, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y4gk00bnm01y5a26o6wk"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pengajuan Peminjaman",
+      "description": "Staff dapat melihat aset tersedia dan mengajukan peminjaman aset yang wajib melalui approval Admin.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Staff dapat melihat daftar aset dengan status tersedia.",
+        "Staff dapat memfilter aset berdasarkan kategori dan lokasi serta mencari berdasarkan kode aset atau nama aset.",
+        "Staff dapat mengajukan peminjaman untuk aset yang tersedia.",
+        "Semua pengajuan memiliki status awal Menunggu Approval.",
+        "Staff wajib mengisi tujuan peminjaman dan estimasi tanggal pengembalian.",
+        "Staff tidak dapat mengajukan aset yang sedang Dipinjam atau Rusak."
+      ],
+      "status": "todo",
+      "order": 6,
+      "sub_features": [
+        {
+          "title": "Daftar Aset Tersedia untuk Staff",
+          "description": "Staff dapat menemukan aset yang dapat dipinjam melalui daftar, pencarian, dan filter.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y5yl00bzm01yhrc44y0z",
+              "title": "Buat halaman daftar aset tersedia untuk Staff",
+              "description": "Tampilkan hanya aset dengan status Tersedia dan kondisi Baik, lengkap dengan kode aset, nama aset, kategori, lokasi, dan status.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y5n800bxm01y1zrxt23y"
+            },
+            {
+              "id": "cmri1y66m00c1m01yln1zcuhr",
+              "title": "Tambahkan pencarian aset",
+              "description": "Implementasikan pencarian berdasarkan kode aset atau nama aset agar Staff dapat menemukan aset dalam waktu singkat.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y5n800bxm01y1zrxt23y"
+            },
+            {
+              "id": "cmri1y6fr00c3m01y0ynlknsv",
+              "title": "Tambahkan filter kategori dan lokasi",
+              "description": "Sediakan filter kategori dan lokasi pada daftar aset tersedia untuk mempercepat proses pemilihan aset.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y5n800bxm01y1zrxt23y"
+            }
+          ]
+        },
+        {
+          "title": "Form Pengajuan Peminjaman",
+          "description": "Staff mengajukan peminjaman aset dengan tujuan dan estimasi tanggal pengembalian.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y6wr00c7m01ymz0buvwh",
+              "title": "Buat schema transaksi peminjaman",
+              "description": "Definisikan tabel transaksi peminjaman dengan aset, peminjam, status transaksi, purpose, estimasi tanggal pengembalian, timestamp pengajuan, dan field waktu workflow lainnya.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y6oa00c5m01y4svfcsky"
+            },
+            {
+              "id": "cmri1y75900c9m01yblfncuww",
+              "title": "Buat form pengajuan dengan validasi field wajib",
+              "description": "Sediakan form peminjaman yang mewajibkan tujuan peminjaman dan estimasi tanggal pengembalian sebelum submit.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y6oa00c5m01y4svfcsky"
+            },
+            {
+              "id": "cmri1y7dt00cbm01yjtyvzskt",
+              "title": "Validasi status aset saat submit",
+              "description": "Cek ulang status aset pada backend saat pengajuan dikirim agar aset yang sudah Dipinjam atau Rusak tidak dapat diajukan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y6oa00c5m01y4svfcsky"
+            },
+            {
+              "id": "cmri1y7lt00cdm01y0xfcpg02",
+              "title": "Simpan transaksi dengan status Menunggu Approval",
+              "description": "Saat pengajuan valid, simpan transaksi dengan status awal Menunggu Approval dan catat waktu pengajuan otomatis.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y6oa00c5m01y4svfcsky"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Approval Peminjaman",
+      "description": "Admin dapat menyetujui atau menolak pengajuan peminjaman Staff dengan alasan jika ditolak.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat melihat daftar pengajuan dengan status Menunggu Approval.",
+        "Admin dapat menyetujui atau menolak pengajuan.",
+        "Jika disetujui, status transaksi berubah menjadi Disetujui.",
+        "Jika ditolak, Admin wajib mengisi alasan penolakan.",
+        "Keputusan approval tercatat di audit log.",
+        "Staff dapat melihat hasil approval pada riwayat pribadi."
+      ],
+      "status": "todo",
+      "order": 7,
+      "sub_features": [
+        {
+          "title": "Daftar Approval Admin",
+          "description": "Admin melihat semua pengajuan peminjaman yang menunggu keputusan.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y8bd00cjm01ywno462kx",
+              "title": "Buat halaman daftar pengajuan menunggu approval",
+              "description": "Tampilkan transaksi berstatus Menunggu Approval beserta nama peminjam, kode aset, nama aset, tujuan, estimasi pengembalian, dan waktu pengajuan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y83e00chm01yd6fp1sz1"
+            },
+            {
+              "id": "cmri1y8je00clm01yioe9k4i1",
+              "title": "Tambahkan detail pengajuan untuk Admin",
+              "description": "Sediakan halaman atau modal detail pengajuan agar Admin dapat melihat informasi aset dan peminjam sebelum memutuskan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y83e00chm01yd6fp1sz1"
+            },
+            {
+              "id": "cmri1y8re00cnm01yf9q9pamg",
+              "title": "Lindungi daftar approval dari akses Staff",
+              "description": "Pastikan halaman dan endpoint daftar approval hanya dapat diakses oleh Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y83e00chm01yd6fp1sz1"
+            }
+          ]
+        },
+        {
+          "title": "Keputusan Approval",
+          "description": "Admin menyetujui atau menolak pengajuan peminjaman.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1y97m00crm01ykafrj421",
+              "title": "Implementasikan aksi setujui pengajuan",
+              "description": "Buat endpoint untuk mengubah status transaksi menjadi Disetujui, mencatat waktu approval, dan mencatat Admin yang menyetujui.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y8zm00cpm01y93rlfpuf"
+            },
+            {
+              "id": "cmri1y9fj00ctm01yv1wcky09",
+              "title": "Implementasikan aksi tolak pengajuan dengan alasan wajib",
+              "description": "Buat endpoint untuk mengubah status transaksi menjadi Ditolak dan mewajibkan alasan penolakan sebelum transaksi disimpan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y8zm00cpm01y93rlfpuf"
+            },
+            {
+              "id": "cmri1y9nj00cvm01yi2ulo2wb",
+              "title": "Validasi ulang ketersediaan aset saat approval",
+              "description": "Sebelum menyetujui, cek status aset terkini dan tolak approval jika status aset bukan Tersedia.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y8zm00cpm01y93rlfpuf"
+            },
+            {
+              "id": "cmri1y9vj00cxm01ygy02ol99",
+              "title": "Catat keputusan approval ke audit log",
+              "description": "Simpan event approval atau penolakan beserta user Admin, status sebelum dan sesudah, alasan jika ada, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1y8zm00cpm01y93rlfpuf"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pencatatan Pengambilan Aset",
+      "description": "Admin mencatat waktu pengambilan aset setelah pengajuan disetujui sehingga aset resmi berstatus Dipinjam.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat mencatat pengambilan hanya untuk transaksi berstatus Disetujui.",
+        "Saat pengambilan dicatat, status transaksi berubah menjadi Dipinjam.",
+        "Status aset berubah menjadi Dipinjam.",
+        "Sistem mencatat waktu pengambilan aktual.",
+        "Aset yang sudah berstatus Dipinjam tidak dapat diajukan oleh Staff lain.",
+        "Pencatatan pengambilan tercatat di audit log."
+      ],
+      "status": "todo",
+      "order": 8,
+      "sub_features": [
+        {
+          "title": "Form Pencatatan Pengambilan",
+          "description": "Admin mencatat bahwa aset yang sudah disetujui benar-benar telah diambil Staff.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yajl00d3m01ywx5bknwc",
+              "title": "Buat daftar transaksi siap diambil",
+              "description": "Tampilkan transaksi berstatus Disetujui yang dapat diproses Admin untuk pencatatan pengambilan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yabj00d1m01ybr9qm24a"
+            },
+            {
+              "id": "cmri1yarj00d5m01ytplkj1lm",
+              "title": "Buat aksi catat pengambilan",
+              "description": "Implementasikan tombol atau form konfirmasi pengambilan yang mencatat waktu pengambilan aktual secara otomatis.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yabj00d1m01ybr9qm24a"
+            },
+            {
+              "id": "cmri1yazn00d7m01y62ejawtj",
+              "title": "Validasi status transaksi sebelum pengambilan",
+              "description": "Tolak pencatatan pengambilan jika transaksi belum berstatus Disetujui atau sudah berada pada status lain.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yabj00d1m01ybr9qm24a"
+            }
+          ]
+        },
+        {
+          "title": "Update Status Saat Pengambilan",
+          "description": "Status transaksi dan aset diperbarui secara atomik ketika pengambilan dicatat.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ybnv00dbm01ybev05x51",
+              "title": "Gunakan transaksi database untuk update pengambilan",
+              "description": "Update status transaksi menjadi Dipinjam dan status aset menjadi Dipinjam dalam satu transaksi PostgreSQL agar tidak terjadi partial update.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ybfn00d9m01yyy1xmwy1"
+            },
+            {
+              "id": "cmri1ybvv00ddm01yh3kj9wtn",
+              "title": "Blokir peminjaman aset setelah pengambilan",
+              "description": "Pastikan aset dengan status Dipinjam tidak muncul dalam daftar aset tersedia dan tidak dapat diajukan melalui API.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ybfn00d9m01yyy1xmwy1"
+            },
+            {
+              "id": "cmri1yc3v00dfm01yizi71ec1",
+              "title": "Catat audit log pengambilan",
+              "description": "Simpan event pengambilan aset berisi user Admin, transaksi, aset, status sebelum dan sesudah, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ybfn00d9m01yyy1xmwy1"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Pengembalian dan Pemeriksaan Kondisi",
+      "description": "Staff mengajukan pengembalian, lalu Admin memeriksa kondisi akhir aset dan menyelesaikan transaksi.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Staff dapat mengajukan pengembalian untuk aset yang sedang dipinjam olehnya.",
+        "Staff tidak dapat mengajukan pengembalian aset milik transaksi user lain.",
+        "Status transaksi berubah menjadi Menunggu Pemeriksaan Pengembalian setelah Staff mengajukan pengembalian.",
+        "Admin wajib memilih kondisi akhir aset Baik atau Rusak.",
+        "Jika kondisi Baik, status transaksi menjadi Selesai dan status aset menjadi Tersedia.",
+        "Jika kondisi Rusak, status transaksi menjadi Selesai dengan Kerusakan dan status aset menjadi Rusak.",
+        "Kondisi akhir dan catatan pemeriksaan tersimpan di riwayat."
+      ],
+      "status": "todo",
+      "order": 9,
+      "sub_features": [
+        {
+          "title": "Pengajuan Pengembalian oleh Staff",
+          "description": "Staff menandai aset yang dipinjamnya sebagai siap dikembalikan untuk diperiksa Admin.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ycrx00dlm01yvu26vq6u",
+              "title": "Buat daftar aset pinjaman aktif milik Staff",
+              "description": "Tampilkan transaksi berstatus Dipinjam yang dimiliki Staff login dan dapat diajukan untuk pengembalian.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ycjx00djm01ycne7j8lo"
+            },
+            {
+              "id": "cmri1yd0300dnm01y2ixrxydx",
+              "title": "Buat aksi ajukan pengembalian",
+              "description": "Implementasikan aksi untuk mengubah status transaksi menjadi Menunggu Pemeriksaan Pengembalian dan mencatat waktu pengajuan pengembalian.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ycjx00djm01ycne7j8lo"
+            },
+            {
+              "id": "cmri1ydb500dpm01y7j2npiws",
+              "title": "Validasi ownership transaksi pengembalian",
+              "description": "Pastikan backend menolak pengajuan pengembalian jika transaksi bukan milik Staff yang sedang login.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ycjx00djm01ycne7j8lo"
+            }
+          ]
+        },
+        {
+          "title": "Pemeriksaan Pengembalian oleh Admin",
+          "description": "Admin memeriksa kondisi fisik aset dan menutup transaksi peminjaman.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yds800dtm01ykhbls50i",
+              "title": "Buat daftar pengembalian menunggu pemeriksaan",
+              "description": "Tampilkan transaksi berstatus Menunggu Pemeriksaan Pengembalian kepada Admin beserta aset, peminjam, dan waktu pengajuan pengembalian.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ydjr00drm01y5tnxig2x"
+            },
+            {
+              "id": "cmri1ye0q00dvm01y7swh3rb4",
+              "title": "Buat form pemeriksaan kondisi akhir",
+              "description": "Sediakan pilihan kondisi akhir Baik atau Rusak dan field catatan kondisi, dengan catatan wajib jika aset dinyatakan Rusak.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ydjr00drm01y5tnxig2x"
+            },
+            {
+              "id": "cmri1ye9900dxm01yacqbptet",
+              "title": "Selesaikan transaksi pengembalian secara atomik",
+              "description": "Update status transaksi, status aset, kondisi aset, waktu pengembalian aktual, dan catatan pemeriksaan dalam satu transaksi database.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ydjr00drm01y5tnxig2x"
+            },
+            {
+              "id": "cmri1yeht00dzm01yb57xoi4u",
+              "title": "Catat audit log pemeriksaan pengembalian",
+              "description": "Simpan event pemeriksaan pengembalian berisi kondisi akhir, catatan, status sebelum dan sesudah, Admin pemeriksa, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ydjr00drm01y5tnxig2x"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Riwayat Peminjaman",
+      "description": "Sistem menyimpan dan menampilkan riwayat lengkap peminjaman dan pengembalian aset untuk pelacakan penggunaan aset.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat melihat riwayat semua transaksi.",
+        "Staff hanya dapat melihat riwayat peminjamannya sendiri.",
+        "Riwayat dapat difilter berdasarkan tanggal, aset, peminjam, status transaksi, lokasi, dan kategori.",
+        "Riwayat menampilkan nama peminjam, kode aset, waktu pengajuan, waktu approval atau penolakan, waktu pengambilan, waktu pengajuan pengembalian, waktu pengembalian aktual, kondisi akhir, dan status transaksi.",
+        "Riwayat transaksi tidak hilang meskipun aset dinonaktifkan.",
+        "Semua perubahan status transaksi tercatat dengan timestamp."
+      ],
+      "status": "todo",
+      "order": 10,
+      "sub_features": [
+        {
+          "title": "Riwayat Semua Transaksi untuk Admin",
+          "description": "Admin dapat melihat seluruh transaksi peminjaman untuk kebutuhan pelacakan dan akuntabilitas.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yf7i00e5m01yhte7ys09",
+              "title": "Buat halaman riwayat transaksi Admin",
+              "description": "Tampilkan seluruh transaksi peminjaman dengan informasi peminjam, aset, status, waktu workflow, kondisi akhir, alasan penolakan, dan catatan kerusakan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yeyv00e3m01yufwveaf0"
+            },
+            {
+              "id": "cmri1yffy00e7m01yha9i5fiv",
+              "title": "Tambahkan filter riwayat Admin",
+              "description": "Sediakan filter berdasarkan tanggal, aset, peminjam, status transaksi, lokasi, dan kategori.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yeyv00e3m01yufwveaf0"
+            },
+            {
+              "id": "cmri1yfok00e9m01ysheusnvd",
+              "title": "Pastikan riwayat tetap tersedia untuk aset nonaktif",
+              "description": "Gunakan referensi transaksi dan snapshot data penting agar riwayat tetap dapat dibaca meskipun aset dinonaktifkan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yeyv00e3m01yufwveaf0"
+            }
+          ]
+        },
+        {
+          "title": "Riwayat Pribadi Staff",
+          "description": "Staff hanya dapat melihat transaksi peminjaman miliknya sendiri.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yg5j00edm01y7547c2zd",
+              "title": "Buat halaman riwayat pribadi Staff",
+              "description": "Tampilkan transaksi milik Staff login beserta status pengajuan, hasil approval, waktu pengambilan, pengembalian, dan kondisi akhir.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yfx400ebm01yyt3hd4em"
+            },
+            {
+              "id": "cmri1yge200efm01ypocxwwzs",
+              "title": "Batasi endpoint riwayat Staff berdasarkan user login",
+              "description": "Pastikan query backend hanya mengembalikan transaksi milik Staff yang sedang login dan menolak akses ke transaksi user lain.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yfx400ebm01yyt3hd4em"
+            },
+            {
+              "id": "cmri1ygml00ehm01yhs52wrgl",
+              "title": "Tampilkan alasan penolakan untuk Staff",
+              "description": "Jika pengajuan ditolak, tampilkan alasan penolakan yang diisi Admin pada riwayat pribadi Staff.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yfx400ebm01yyt3hd4em"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Notifikasi In-App",
+      "description": "Sistem menyediakan notifikasi dalam aplikasi untuk event penting menggunakan Server-Sent Events sebagai delivery realtime.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin menerima notifikasi saat Staff membuat pengajuan peminjaman.",
+        "Staff menerima notifikasi saat pengajuan disetujui atau ditolak.",
+        "Admin menerima notifikasi saat Staff mengajukan pengembalian.",
+        "Admin menerima notifikasi saat stok berada di bawah minimum.",
+        "Notifikasi dapat ditandai sudah dibaca.",
+        "Jika koneksi SSE terputus, notifikasi tetap dapat dilihat setelah halaman direfresh."
+      ],
+      "status": "todo",
+      "order": 11,
+      "sub_features": [
+        {
+          "title": "Penyimpanan Notifikasi",
+          "description": "Notifikasi disimpan di PostgreSQL agar tidak bergantung pada koneksi realtime.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yhc700enm01yl0wqkgb4",
+              "title": "Buat schema PostgreSQL untuk notifikasi",
+              "description": "Definisikan tabel notifikasi dengan penerima, role penerima, tipe event, judul, isi, status dibaca, entity reference, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yh3u00elm01y33sg24p4"
+            },
+            {
+              "id": "cmri1yhk700epm01yzn59fm60",
+              "title": "Buat service pembuatan notifikasi event workflow",
+              "description": "Implementasikan fungsi backend untuk membuat notifikasi pada pengajuan peminjaman baru, hasil approval, pengajuan pengembalian, dan stok menipis.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yh3u00elm01y33sg24p4"
+            },
+            {
+              "id": "cmri1yhs800erm01y5udbffyb",
+              "title": "Buat endpoint daftar dan update status notifikasi",
+              "description": "Sediakan Route Handlers untuk mengambil notifikasi user login dan menandai notifikasi sebagai sudah dibaca.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yh3u00elm01y33sg24p4"
+            }
+          ]
+        },
+        {
+          "title": "Realtime Notification dengan SSE",
+          "description": "Mengirimkan notifikasi terbaru secara realtime menggunakan Server-Sent Events.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yi8900evm01ykeaki7ez",
+              "title": "Buat endpoint SSE untuk notifikasi",
+              "description": "Implementasikan Next.js Route Handler berbasis SSE yang mengirim event notifikasi kepada user terautentikasi.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yi0800etm01y0atgmhka"
+            },
+            {
+              "id": "cmri1yiga00exm01y6dsyi09c",
+              "title": "Hubungkan notification center frontend ke SSE",
+              "description": "Tambahkan client SSE di Next.js untuk menerima notifikasi realtime dan memperbarui notification center atau dashboard.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yi0800etm01y0atgmhka"
+            },
+            {
+              "id": "cmri1yioa00ezm01yb65i1nxi",
+              "title": "Implementasikan fallback saat SSE terputus",
+              "description": "Pastikan notifikasi tetap muncul setelah refresh halaman dan tambahkan mekanisme reconnect otomatis atau indikator koneksi jika memungkinkan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yi0800etm01y0atgmhka"
+            }
+          ]
+        },
+        {
+          "title": "Notifikasi Stok Menipis",
+          "description": "Admin menerima notifikasi saat stok aset berada di bawah minimum.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yj5n00f3m01y3ei4qhfy",
+              "title": "Tambahkan minimum stok per aset",
+              "description": "Pastikan data aset memiliki field minimum stok yang dapat disimpan dan divalidasi oleh Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yiwb00f1m01y9p8u4ws0"
+            },
+            {
+              "id": "cmri1yje900f5m01yggatkrn6",
+              "title": "Cek stok setelah perubahan stok",
+              "description": "Setelah barang keluar atau perubahan stok lain, bandingkan stok terbaru dengan minimum stok aset.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yiwb00f1m01y9p8u4ws0"
+            },
+            {
+              "id": "cmri1yjmp00f7m01yus0325ru",
+              "title": "Buat notifikasi stok menipis untuk Admin",
+              "description": "Jika stok berada di bawah minimum, simpan notifikasi dengan timestamp dan tampilkan pada dashboard Admin atau notification center.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yiwb00f1m01y9p8u4ws0"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Audit Log",
+      "description": "Sistem mencatat perubahan penting pada aset, stok, lokasi, status, transaksi, dan laporan agar dapat ditelusuri oleh Admin.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Audit log mencatat user pelaku, role pelaku, aksi, entitas yang diubah, ID entitas, nilai sebelum perubahan, nilai sesudah perubahan, dan timestamp.",
+        "Untuk update, sistem menyimpan nilai sebelum dan sesudah.",
+        "Admin dapat melihat dan memfilter audit log.",
+        "Staff tidak dapat mengakses audit log.",
+        "Audit log tidak dapat diedit atau dihapus melalui UI MVP."
+      ],
+      "status": "todo",
+      "order": 12,
+      "sub_features": [
+        {
+          "title": "Pencatatan Audit Log Dasar",
+          "description": "Audit log untuk create, update, dan delete aset pada foundation MVP.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ykcb00fdm01yswi5ywfe",
+              "title": "Buat schema PostgreSQL untuk audit log",
+              "description": "Definisikan tabel audit log dengan user_id, role, aksi, entitas, entity_id, before_value, after_value, timestamp, dan metadata opsional.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yk3q00fbm01ydaq2x0ya"
+            },
+            {
+              "id": "cmri1ykku00ffm01ytjflvgg6",
+              "title": "Tambahkan audit log pada CRUD aset",
+              "description": "Catat event create, update, delete atau soft delete aset, termasuk nilai sebelum dan sesudah untuk perubahan data.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yk3q00fbm01ydaq2x0ya"
+            },
+            {
+              "id": "cmri1ykst00fhm01y1rjyirge",
+              "title": "Pastikan audit log tidak dapat dihapus dari UI",
+              "description": "Jangan sediakan aksi edit atau hapus audit log pada antarmuka MVP dan lindungi endpoint terkait.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yk3q00fbm01ydaq2x0ya"
+            }
+          ]
+        },
+        {
+          "title": "Audit Log Transaksi Lengkap",
+          "description": "Audit log untuk perubahan stok, lokasi, peminjaman, approval, pengambilan, dan pengembalian.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yl8u00flm01y68qrucc6",
+              "title": "Tambahkan audit log pada transaksi stok",
+              "description": "Catat setiap barang masuk dan barang keluar dengan stok sebelum, stok sesudah, user pelaku, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yl0u00fjm01y5xwuh76h"
+            },
+            {
+              "id": "cmri1ylgv00fnm01yzeuj0497",
+              "title": "Tambahkan audit log pada workflow peminjaman",
+              "description": "Catat pengajuan peminjaman, approval, penolakan, pengambilan, pengajuan pengembalian, dan pemeriksaan pengembalian.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yl0u00fjm01y5xwuh76h"
+            },
+            {
+              "id": "cmri1ylow00fpm01ya4ao63c6",
+              "title": "Tambahkan audit log pada perubahan lokasi dan kondisi aset",
+              "description": "Catat perubahan lokasi serta perubahan kondisi aset menjadi Baik atau Rusak dengan before-after value.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yl0u00fjm01y5xwuh76h"
+            },
+            {
+              "id": "cmri1ylww00frm01y9s2vduq1",
+              "title": "Tambahkan audit log pada export laporan",
+              "description": "Catat aksi export laporan oleh Admin beserta format export, filter yang digunakan, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yl0u00fjm01y5xwuh76h"
+            }
+          ]
+        },
+        {
+          "title": "Viewer Audit Log Admin",
+          "description": "Admin dapat melihat audit log untuk menelusuri aktivitas sistem.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ymcy00fvm01ynw6c4iw0",
+              "title": "Buat halaman audit log untuk Admin",
+              "description": "Tampilkan audit log dengan kolom user, role, aksi, entitas, entity_id, timestamp, dan detail perubahan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ym4y00ftm01ydvwe3ruh"
+            },
+            {
+              "id": "cmri1ymky00fxm01y6b3mooue",
+              "title": "Tambahkan filter dasar audit log",
+              "description": "Sediakan filter berdasarkan user, tanggal, aksi, dan entitas agar Admin dapat mencari event tertentu.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ym4y00ftm01ydvwe3ruh"
+            },
+            {
+              "id": "cmri1ymsz00fzm01y9afvv9ca",
+              "title": "Lindungi audit log dari akses Staff",
+              "description": "Pastikan halaman dan endpoint audit log hanya dapat diakses Admin dan mengembalikan 403 untuk Staff.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ym4y00ftm01ydvwe3ruh"
+            }
+          ]
+        },
+        {
+          "title": "Pagination dan Advanced Filter Audit Log",
+          "description": "Peningkatan kemampuan pencarian dan navigasi audit log untuk data yang bertambah.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ynh900g3m01ylodpxb41",
+              "title": "Tambahkan pagination pada daftar audit log",
+              "description": "Implementasikan pagination server-side agar audit log tetap cepat dibuka ketika jumlah data meningkat.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yn8z00g1m01yfunsckks"
+            },
+            {
+              "id": "cmri1ynp900g5m01y27db2fok",
+              "title": "Tambahkan advanced filter audit log",
+              "description": "Sediakan filter lanjutan berdasarkan rentang tanggal, kombinasi aksi-entitas, user, dan entity_id.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yn8z00g1m01yfunsckks"
+            },
+            {
+              "id": "cmri1ynx900g7m01yghauyuw4",
+              "title": "Optimalkan query audit log",
+              "description": "Tambahkan index database pada kolom timestamp, user_id, aksi, dan entitas untuk mempercepat pencarian audit log.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yn8z00g1m01yfunsckks"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Dashboard Admin Dasar",
+      "description": "Admin dapat melihat ringkasan kondisi aset dan transaksi aktif setelah login.",
+      "priority": "P0",
+      "acceptance_criteria": [
+        "Admin dapat melihat dashboard setelah login.",
+        "Dashboard Admin menampilkan total aset, total aset tersedia, total aset dipinjam, total aset rusak, stok menipis, dan jumlah transaksi aktif.",
+        "Dashboard dapat difilter minimal berdasarkan tanggal dan status.",
+        "Staff tidak dapat melihat dashboard global.",
+        "Dashboard Admin load maksimal 3 detik pada skala awal."
+      ],
+      "status": "todo",
+      "order": 13,
+      "sub_features": [
+        {
+          "title": "Ringkasan Aset dan Transaksi",
+          "description": "Dashboard dasar untuk memantau status aset dan transaksi aktif.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yola00gdm01yysoyuho9",
+              "title": "Buat query agregasi dashboard",
+              "description": "Hitung total aset, aset tersedia, aset dipinjam, aset rusak, aset dengan stok menipis, dan transaksi aktif dari PostgreSQL.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yod900gbm01ytoqp8zva"
+            },
+            {
+              "id": "cmri1yota00gfm01ypoubbsve",
+              "title": "Buat halaman dashboard Admin",
+              "description": "Tampilkan kartu ringkasan aset dan transaksi aktif pada halaman awal Admin setelah login.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yod900gbm01ytoqp8zva"
+            },
+            {
+              "id": "cmri1yp1a00ghm01ynh4euxs8",
+              "title": "Tambahkan filter tanggal dan status pada dashboard",
+              "description": "Sediakan filter minimal berdasarkan tanggal dan status agar ringkasan dashboard sesuai parameter yang dipilih.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yod900gbm01ytoqp8zva"
+            },
+            {
+              "id": "cmri1ypbi00gjm01yzlq204sj",
+              "title": "Batasi dashboard global hanya untuk Admin",
+              "description": "Pastikan halaman dan API dashboard global tidak dapat diakses Staff.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yod900gbm01ytoqp8zva"
+            }
+          ]
+        },
+        {
+          "title": "Peningkatan Tampilan Dashboard",
+          "description": "Peningkatan visual dan usability dashboard setelah fitur dasar stabil.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ypsk00gnm01y4j2vxisk",
+              "title": "Perbaiki visualisasi ringkasan dashboard",
+              "description": "Tambahkan komponen visual seperti chart sederhana atau indikator warna untuk status aset, stok menipis, dan transaksi aktif.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ypk100glm01y79i8udkk"
+            },
+            {
+              "id": "cmri1yq1300gpm01yevuw0s0s",
+              "title": "Tambahkan shortcut aksi utama Admin",
+              "description": "Sediakan shortcut dari dashboard ke input aset, approval peminjaman, pengembalian menunggu pemeriksaan, dan laporan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ypk100glm01y79i8udkk"
+            },
+            {
+              "id": "cmri1yq9m00grm01yg6sldeed",
+              "title": "Optimalkan layout dashboard responsif",
+              "description": "Pastikan dashboard nyaman digunakan pada layar desktop dan tablet dengan struktur informasi yang sederhana.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1ypk100glm01y79i8udkk"
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "title": "Laporan dan Export",
+      "description": "Admin dapat melihat laporan aset, memfilter data, dan mengekspor laporan untuk kebutuhan operasional serta manajemen.",
+      "priority": "P1",
+      "acceptance_criteria": [
+        "Admin dapat melihat dashboard laporan.",
+        "Admin dapat memfilter laporan berdasarkan tanggal, lokasi, kategori, dan status aset.",
+        "Admin dapat mengekspor PDF untuk manajemen.",
+        "Admin dapat mengekspor Excel atau CSV untuk kebutuhan Admin.",
+        "Laporan menampilkan ringkasan jumlah aset, aset tersedia, aset dipinjam, aset rusak, dan aset hilang atau barang keluar jika dicatat.",
+        "Staff tidak dapat mengakses menu laporan global."
+      ],
+      "status": "todo",
+      "order": 14,
+      "sub_features": [
+        {
+          "title": "Filter Laporan Lengkap",
+          "description": "Admin dapat memfilter laporan berdasarkan parameter lengkap untuk kebutuhan analisis.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yqz800gxm01ydnxmgh21",
+              "title": "Buat halaman laporan Admin",
+              "description": "Sediakan halaman laporan yang menampilkan ringkasan dan detail aset berdasarkan data aset, transaksi, dan barang keluar.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yqqp00gvm01yab20n0t2"
+            },
+            {
+              "id": "cmri1yr7r00gzm01yh8rd9nsl",
+              "title": "Tambahkan filter tanggal, lokasi, kategori, dan status aset",
+              "description": "Implementasikan filter laporan lengkap sesuai parameter yang dipilih Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yqqp00gvm01yab20n0t2"
+            },
+            {
+              "id": "cmri1yrga00h1m01ym5nfncgy",
+              "title": "Tampilkan ringkasan laporan sesuai filter",
+              "description": "Hitung dan tampilkan jumlah aset, aset tersedia, aset dipinjam, aset rusak, dan aset hilang atau barang keluar berdasarkan hasil filter.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yqqp00gvm01yab20n0t2"
+            },
+            {
+              "id": "cmri1yrot00h3m01yt6hakh76",
+              "title": "Batasi akses laporan global hanya untuk Admin",
+              "description": "Pastikan menu, halaman, dan endpoint laporan tidak dapat diakses oleh Staff.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yqqp00gvm01yab20n0t2"
+            }
+          ]
+        },
+        {
+          "title": "Export PDF untuk Manajemen",
+          "description": "Admin dapat membuat laporan PDF untuk kebutuhan manajemen.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1ys5h00h7m01yiq54nd7a",
+              "title": "Implementasikan generator PDF laporan",
+              "description": "Buat proses backend untuk menghasilkan PDF berisi ringkasan dan detail laporan sesuai filter tanggal, lokasi, kategori, dan status aset.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yrxh00h5m01y6j9civan"
+            },
+            {
+              "id": "cmri1ysdh00h9m01yg4cr3dop",
+              "title": "Buat tombol export PDF pada halaman laporan",
+              "description": "Tambahkan aksi export PDF yang hanya tersedia untuk Admin dan menggunakan filter laporan yang sedang aktif.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yrxh00h5m01y6j9civan"
+            },
+            {
+              "id": "cmri1yslh00hbm01yxb78ne9u",
+              "title": "Tangani error export PDF",
+              "description": "Tampilkan pesan error jika export gagal, hindari pembuatan file rusak, dan catat error pada log aplikasi.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yrxh00h5m01y6j9civan"
+            },
+            {
+              "id": "cmri1yste00hdm01yek278kj9",
+              "title": "Catat export PDF ke audit log",
+              "description": "Simpan event export laporan PDF beserta user Admin, filter yang digunakan, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yrxh00h5m01y6j9civan"
+            }
+          ]
+        },
+        {
+          "title": "Export Excel atau CSV untuk Admin",
+          "description": "Admin dapat mengekspor data laporan dalam format yang dapat diolah ulang.",
+          "status": "todo",
+          "tasks": [
+            {
+              "id": "cmri1yt9i00hhm01yaezvfqbx",
+              "title": "Implementasikan export CSV atau Excel",
+              "description": "Buat proses backend untuk menghasilkan file CSV atau Excel berisi data laporan sesuai filter yang dipilih Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yt1i00hfm01yk7qr79wa"
+            },
+            {
+              "id": "cmri1ythj00hjm01yak14g0b5",
+              "title": "Buat tombol export CSV atau Excel pada halaman laporan",
+              "description": "Tambahkan aksi export yang menggunakan filter aktif dan hanya dapat dijalankan oleh Admin.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yt1i00hfm01yk7qr79wa"
+            },
+            {
+              "id": "cmri1ytpq00hlm01yovpnlv53",
+              "title": "Pastikan struktur kolom export mudah diolah",
+              "description": "Sertakan kolom kode aset, nama aset, kategori, lokasi, status, kondisi, stok, transaksi terkait, dan tanggal relevan.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yt1i00hfm01yk7qr79wa"
+            },
+            {
+              "id": "cmri1ytxr00hnm01y9bldcxci",
+              "title": "Catat export CSV atau Excel ke audit log",
+              "description": "Simpan event export laporan CSV atau Excel beserta user Admin, filter yang digunakan, jumlah baris jika tersedia, dan timestamp.",
+              "status": "todo",
+              "assigned_to": "human",
+              "version": 1,
+              "sub_feature_id": "cmri1yt1i00hfm01yk7qr79wa"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "mcp": {
+    "endpoint": "http://127.0.0.1:3333/mcp/cmri1ml69008hm01y80xxh7vj",
+    "available": true
+  }
+}

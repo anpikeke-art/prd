@@ -1,11 +1,8 @@
 'use client';
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import ReactMarkdown from 'react-markdown';
-import { ProjectDiagram } from '@/components/project-diagram';
 import { TaskManager } from '@/components/task-manager';
-import { buildProjectGraph, calcProjectProgress, flattenTaskEvents } from '@/lib/project-service';
-import type { Edge, Node } from 'reactflow';
+import { flattenTaskEvents } from '@/lib/project-service';
 
 type ProjectData = NonNullable<Awaited<ReturnType<typeof import('@/lib/project-service').getProjectGraph>>> & {
   architecture_text: string | null;
@@ -15,16 +12,35 @@ type Props = {
   projectId: string;
 };
 
+type MonitorEvent = {
+  id: string;
+  task_title: string;
+  event_type: string;
+  actor: string;
+  timestamp: string;
+  detail?: unknown;
+};
+
+type TaskEventSource = {
+  id: string;
+  task_title: string;
+  event_type: string;
+  actor: string;
+  timestamp: Date | string;
+  detail?: unknown;
+};
+
 export function ProjectDashboard({ projectId }: Props) {
   const [project, setProject] = useState<ProjectData | null>(null);
   const [loading, setLoading] = useState(true);
-  const [tab, setTab] = useState<'diagram' | 'details'>('diagram');
-  const [mcp, setMcp] = useState<{ endpoint: string; token: string } | null>(null);
-  const [showArch, setShowArch] = useState(false);
-  const [showTech, setShowTech] = useState(false);
-  const [showClarify, setShowClarify] = useState(false);
+  const [monitoring, setMonitoring] = useState(false);
+  const [monitorState, setMonitorState] = useState<'idle' | 'connecting' | 'waiting' | 'live' | 'error'>('idle');
+  const [showWaitingModal, setShowWaitingModal] = useState(false);
+  const [mcp, setMcp] = useState<{ endpoint: string; token: string; last_agent?: string | null; last_sync_at?: string | null } | null>(null);
   const [mcpError, setMcpError] = useState('');
+  const [monitorError, setMonitorError] = useState('');
   const [error, setError] = useState('');
+  const [liveEvents, setLiveEvents] = useState<MonitorEvent[]>([]);
 
   const loadProject = useCallback(async () => {
     setLoading(true);
@@ -41,15 +57,35 @@ export function ProjectDashboard({ projectId }: Props) {
     }
   }, [projectId]);
 
+  const refreshMcp = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/projects/${projectId}/mcp`);
+      const json = await res.json();
+      if (!res.ok || !json.success) throw new Error(json?.error?.message ?? 'Refresh failed');
+      if (json.data) {
+        setMcp((prev) => prev ? { ...prev, ...json.data } : { endpoint: json.data.endpoint, token: '', last_agent: json.data.last_agent ?? null, last_sync_at: json.data.last_sync_at ?? null });
+      }
+    } catch (err) {
+      setMonitorError(err instanceof Error ? err.message : 'Refresh failed');
+    }
+  }, [projectId]);
+
   async function connectMcp() {
     setMcpError('');
+    setMonitorError('');
+    setMonitorState('connecting');
     try {
       const res = await fetch(`/api/projects/${projectId}/connect`, { method: 'POST' });
       const json = await res.json();
       if (!res.ok || !json.success) throw new Error(json?.error?.message ?? 'Connect failed');
-      setMcp({ endpoint: json.data.endpoint, token: json.data.token });
+      setMcp({ endpoint: json.data.endpoint, token: json.data.token, last_agent: null, last_sync_at: null });
+      setMonitoring(true);
+      setMonitorState('waiting');
+      setShowWaitingModal(true);
       await navigator.clipboard.writeText(JSON.stringify(json.data, null, 2)).catch(() => {});
+      await refreshMcp();
     } catch (err) {
+      setMonitorState('error');
       setMcpError(err instanceof Error ? err.message : 'Connect failed');
     }
   }
@@ -58,51 +94,129 @@ export function ProjectDashboard({ projectId }: Props) {
     void loadProject();
   }, [loadProject]);
 
-  const graph = useMemo(() => buildProjectGraph(project as any), [project]);
-  const events = useMemo(() => flattenTaskEvents(project as any), [project]);
-  const progress = useMemo(() => (project ? calcProjectProgress(project as any) : 0), [project]);
+  useEffect(() => {
+    if (!monitoring) return;
+
+    const source = new EventSource(`/api/projects/${projectId}/events`);
+    source.addEventListener('project_event', (evt) => {
+      try {
+        const data = JSON.parse((evt as MessageEvent).data) as { latest?: MonitorEvent };
+        if (data.latest) {
+          setLiveEvents((prev) => {
+            const next = [data.latest!, ...prev.filter((item) => item.id !== data.latest!.id)];
+            return next.slice(0, 20);
+          });
+        }
+      } catch {
+        // Ignore malformed payloads and fall back to refetch.
+      }
+      void loadProject();
+      void refreshMcp();
+    });
+    source.onerror = () => {
+      setMonitorState('error');
+      setMonitorError('Realtime connection dropped');
+    };
+
+    return () => source.close();
+  }, [loadProject, monitoring, projectId, refreshMcp]);
+
+  useEffect(() => {
+    if (!monitoring) return;
+    const interval = setInterval(() => {
+      void refreshMcp();
+    }, 5000);
+    return () => clearInterval(interval);
+  }, [monitoring, refreshMcp]);
+
+  useEffect(() => {
+    if (monitorState !== 'waiting') return;
+    if (mcp?.last_sync_at) {
+      setMonitorState('live');
+      setShowWaitingModal(false);
+    }
+  }, [monitorState, mcp?.last_sync_at]);
+
   const tasks = useMemo(() => (project?.features ?? []).flatMap((feature) => feature.sub_features.flatMap((sub) => sub.tasks)), [project]);
 
-  if (loading) return (
-    <div className="rounded-card border border-border bg-surface/86 p-5 shadow-card backdrop-blur-xl">
-      <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-2">
-          <div className="skeleton h-5 w-48 rounded-full" />
-          <div className="skeleton h-3 w-64 rounded-full" />
+  const stats = useMemo(() => {
+    const total = tasks.length;
+    const inProgress = tasks.filter((task) => task.status === 'in_progress').length;
+    const done = tasks.filter((task) => task.status === 'done').length;
+    const agentAssigned = tasks.filter((task) => task.assigned_to === 'agent').length;
+    return {
+      total,
+      inProgress,
+      done,
+      agentAssigned,
+      percent: total ? Math.round((done / total) * 100) : 0,
+    };
+  }, [tasks]);
+
+  const events = useMemo(() => {
+    const source = flattenTaskEvents(project as any) as TaskEventSource[];
+    const normalized: MonitorEvent[] = source
+      .map((event) => ({
+        ...event,
+        timestamp: event.timestamp instanceof Date ? event.timestamp.toISOString() : event.timestamp,
+      }))
+      .slice()
+      .sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime());
+    return liveEvents.length > 0
+      ? [...liveEvents, ...normalized.filter((event) => !liveEvents.some((live) => live.id === event.id))].slice(0, 20)
+      : normalized.slice(0, 20);
+  }, [liveEvents, project]);
+
+  if (loading) {
+    return (
+      <div className="rounded-card border border-border bg-surface/86 p-5 shadow-card backdrop-blur-xl">
+        <div className="mb-5 flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+          <div className="space-y-2">
+            <div className="skeleton h-5 w-48 rounded-full" />
+            <div className="skeleton h-3 w-64 rounded-full" />
+          </div>
+          <div className="skeleton h-10 w-32 rounded-input" />
         </div>
-        <div className="skeleton h-10 w-32 rounded-input" />
+        <div className="grid gap-3 sm:grid-cols-3">
+          <div className="skeleton h-24 rounded-card" />
+          <div className="skeleton h-24 rounded-card" />
+          <div className="skeleton h-24 rounded-card" />
+        </div>
+        <div className="skeleton mt-4 h-[420px] rounded-card" />
       </div>
-      <div className="grid gap-3 sm:grid-cols-3">
-        <div className="skeleton h-24 rounded-card" />
-        <div className="skeleton h-24 rounded-card" />
-        <div className="skeleton h-24 rounded-card" />
-      </div>
-      <div className="skeleton mt-4 h-[420px] rounded-card" />
-    </div>
-  );
-  if (!project) return <div className="rounded-card border border-pastel-red bg-pastel-red p-6 text-sm text-pastel-red-text">{error || 'No project yet'}</div>;
+    );
+  }
+
+  if (!project) {
+    return <div className="rounded-card border border-pastel-red bg-pastel-red p-6 text-sm text-pastel-red-text">{error || 'No project yet'}</div>;
+  }
 
   return (
     <div className="space-y-4">
-      {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl surface-glow">
         <div className="min-w-0">
+          <p className="mb-1 font-mono text-[11px] uppercase tracking-[0.18em] text-muted">Realtime MCP</p>
           <h2 className="truncate text-xl font-black tracking-tight text-primary">{project.title}</h2>
           <div className="mt-1 flex items-center gap-3">
             <div className="flex items-center gap-2">
               <div className="h-2 w-28 overflow-hidden rounded-full bg-border">
-                <div className="h-full bg-accent transition-all" style={{ width: `${progress}%` }} />
+                <div className="h-full bg-accent transition-all" style={{ width: `${stats.percent}%` }} />
               </div>
-              <span className="font-mono text-xs text-secondary">{progress}%</span>
+              <span className="font-mono text-xs text-secondary">{stats.percent}%</span>
             </div>
             <span className="text-xs text-muted">
-              {(project.features ?? []).length} fitur · {tasks.length} task
+              {stats.total} task · {stats.inProgress} in progress · {stats.agentAssigned} assigned to agent
             </span>
           </div>
         </div>
         <div className="flex shrink-0 gap-2">
-          <button type="button" onClick={connectMcp} className="rounded-input bg-accent px-3 py-2 text-xs font-semibold text-accent-text shadow-card transition hover:-translate-y-0.5 hover:bg-accent-hover active:scale-[0.98]">
-            Connect MCP
+          <button
+            type="button"
+            onClick={connectMcp}
+            disabled={monitorState === 'connecting' || monitorState === 'waiting'}
+            className="rounded-input bg-accent px-3 py-2 text-xs font-semibold text-accent-text shadow-card transition hover:-translate-y-0.5 hover:bg-accent-hover active:scale-[0.98] disabled:opacity-50"
+          >
+            {monitorState === 'connecting' ? 'Connecting…' : monitorState === 'waiting' ? 'Waiting…' : monitoring ? 'Reconnect MCP' : 'Connect MCP'}
           </button>
           <button type="button" onClick={loadProject} className="rounded-input border border-border bg-surface px-3 py-2 text-xs font-semibold text-secondary transition hover:border-accent/35 hover:bg-surface-alt">
             Refresh
@@ -110,86 +224,176 @@ export function ProjectDashboard({ projectId }: Props) {
         </div>
       </div>
 
-      {/* MCP info */}
-      {mcp && (
-        <div className="rounded-card border border-pastel-green bg-pastel-green p-4">
-          <p className="mb-1 text-xs font-semibold text-pastel-green-text">MCP endpoint ready</p>
-          <p className="break-all font-mono text-[11px] text-pastel-green-text/80">Endpoint: {mcp.endpoint}</p>
-          <p className="break-all font-mono text-[11px] text-pastel-green-text/80">Token: {mcp.token}</p>
+      {(mcpError || monitorError) && (
+        <div className="rounded-card border border-pastel-red bg-pastel-red p-4 text-xs text-pastel-red-text">
+          {mcpError || monitorError}
         </div>
       )}
-      {mcpError && <p className="text-xs text-pastel-red-text">{mcpError}</p>}
 
-      {/* Task manager — main content */}
-      <TaskManager projectId={projectId} tasks={tasks as any} onChanged={loadProject} />
-
-      {/* Split view */}
-      <div className="grid min-h-0 gap-4 lg:grid-cols-[1.3fr_0.7fr]">
-        {/* Diagram panel */}
-        <section className={`${tab === 'details' ? 'hidden md:block' : 'block'}`}>
-          <ProjectDiagram nodes={graph.nodes as Node[]} edges={graph.edges as Edge[]} />
-        </section>
-
-        {/* Details panel */}
-        <section className={`${tab === 'diagram' ? 'hidden md:block' : 'block'} space-y-4`}>
-          {/* Mobile tab toggle */}
-          <div className="flex gap-2 md:hidden">
-            <button type="button" className={`rounded-input px-3 py-1.5 text-xs font-semibold ${tab === 'diagram' ? 'bg-accent text-accent-text' : 'border border-border bg-surface text-secondary'}`} onClick={() => setTab('diagram')}>Diagram</button>
-            <button type="button" className={`rounded-input px-3 py-1.5 text-xs font-semibold ${tab === 'details' ? 'bg-accent text-accent-text' : 'border border-border bg-surface text-secondary'}`} onClick={() => setTab('details')}>Details</button>
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <h3 className="mb-2 text-sm font-black text-primary">Overview</h3>
-            <p className="text-sm leading-relaxed text-secondary">{project.overview ?? '-'}</p>
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <button onClick={() => setShowArch(!showArch)} className="flex w-full items-center justify-between gap-2 text-left">
-              <h3 className="text-sm font-black text-primary">Architecture</h3>
-              <svg className={`size-4 shrink-0 text-muted transition-transform ${showArch ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="6 9 12 15 18 9" /></svg>
-            </button>
-            {showArch && project.architecture_text && (
-              <div className="prose prose-sm prose-headings:font-sans prose-headings:font-black prose-a:text-accent mt-3 max-h-[60vh] max-w-none overflow-auto rounded-input bg-surface-alt p-4 leading-relaxed text-primary">
-                <ReactMarkdown>{project.architecture_text}</ReactMarkdown>
-              </div>
-            )}
-            {showArch && !project.architecture_text && <p className="mt-3 text-xs text-muted">-</p>}
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <button onClick={() => setShowTech(!showTech)} className="flex w-full items-center justify-between gap-2 text-left">
-              <h3 className="text-sm font-black text-primary">Tech stack</h3>
-              <svg className={`size-4 shrink-0 text-muted transition-transform ${showTech ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="6 9 12 15 18 9" /></svg>
-            </button>
-            {showTech && (
-              <pre className="mt-3 overflow-auto rounded-input bg-surface-alt p-4 font-mono text-xs leading-relaxed text-secondary">{JSON.stringify(project.tech_stack ?? {}, null, 2)}</pre>
-            )}
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <button onClick={() => setShowClarify(!showClarify)} className="flex w-full items-center justify-between gap-2 text-left">
-              <h3 className="text-sm font-black text-primary">Clarification log</h3>
-              <svg className={`size-4 shrink-0 text-muted transition-transform ${showClarify ? 'rotate-180' : ''}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}><polyline points="6 9 12 15 18 9" /></svg>
-            </button>
-            {showClarify && (
-              <pre className="mt-3 overflow-auto rounded-input bg-surface-alt p-4 font-mono text-xs leading-relaxed text-secondary">{JSON.stringify(project.clarification_log ?? {}, null, 2)}</pre>
-            )}
-          </div>
-
-          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
-            <h3 className="mb-3 text-sm font-black text-primary">Task events</h3>
-            <div className="space-y-2">
-              {events.slice(0, 20).map((event) => (
-                <div key={event.id} className="rounded-input border border-border bg-surface-alt p-3 transition hover:border-accent/35">
-                  <div className="text-xs font-medium text-primary">{event.task_title}</div>
-                  <div className="mt-0.5 font-mono text-[10px] uppercase tracking-wider text-muted">{event.event_type} · {event.actor}</div>
+      {showWaitingModal && monitorState === 'waiting' && mcp && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm">
+          <div className="mx-4 w-full max-w-lg rounded-2xl border border-border bg-surface p-6 shadow-2xl">
+            <div className="mb-4 flex items-center justify-between">
+              <h3 className="text-sm font-black text-primary">MCP Belum Terkoneksi</h3>
+              <button type="button" onClick={() => setShowWaitingModal(false)} className="rounded-full p-1 text-muted transition hover:bg-surface-alt hover:text-primary">&times;</button>
+            </div>
+            <p className="mb-4 text-xs leading-relaxed text-secondary">
+              Session MCP sudah dibuat, tapi belum ada AI agent yang terhubung. Salin
+              endpoint dan token di bawah, lalu atur AI coding agent-mu (Claude Code, Cursor, dll)
+              untuk menggunakan MCP ini.
+            </p>
+            <div className="mb-3 space-y-2">
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Endpoint</p>
+                <div className="flex items-center gap-2 rounded-input border border-border bg-surface-alt p-2">
+                  <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-secondary">{mcp.endpoint}</code>
+                  <button type="button" onClick={() => navigator.clipboard.writeText(mcp.endpoint)} className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-[10px] font-medium text-muted transition hover:bg-surface-alt hover:text-primary">Copy</button>
                 </div>
-              ))}
+              </div>
+              <div>
+                <p className="mb-1 text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Token</p>
+                <div className="flex items-center gap-2 rounded-input border border-border bg-surface-alt p-2">
+                  <code className="min-w-0 flex-1 truncate font-mono text-[11px] text-secondary">{mcp.token}</code>
+                  <button type="button" onClick={() => navigator.clipboard.writeText(mcp.token)} className="shrink-0 rounded-md border border-border bg-surface px-2 py-1 text-[10px] font-medium text-muted transition hover:bg-surface-alt hover:text-primary">Copy</button>
+                </div>
+              </div>
+            </div>
+            <div className="mb-3 space-y-2">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Config — pilih platform:</p>
+              <div className="grid grid-cols-2 gap-2">
+                <button type="button" onClick={() => {
+                  const json = JSON.stringify({ mcpServers: { 'prd-studio': { transport: 'streamable-http', url: mcp.endpoint, headers: { Authorization: `Bearer ${mcp.token}` } } } }, null, 2);
+                  navigator.clipboard.writeText(json);
+                }} className="rounded-input border border-border bg-surface-alt px-3 py-2 text-[11px] font-medium text-secondary transition hover:border-accent/35 hover:bg-surface">
+                  Claude Code
+                </button>
+                <button type="button" onClick={() => {
+                  const json = JSON.stringify({ mcpServers: { 'prd-studio': { type: 'url', url: mcp.endpoint, headers: { Authorization: `Bearer ${mcp.token}` } } } }, null, 2);
+                  navigator.clipboard.writeText(json);
+                }} className="rounded-input border border-border bg-surface-alt px-3 py-2 text-[11px] font-medium text-secondary transition hover:border-accent/35 hover:bg-surface">
+                  Cursor
+                </button>
+                <button type="button" onClick={() => {
+                  const json = JSON.stringify({ mcp: { 'prd-studio': { type: 'remote', url: mcp.endpoint, headers: { Authorization: `Bearer ${mcp.token}` } } } }, null, 2);
+                  navigator.clipboard.writeText(json);
+                }} className="rounded-input border border-border bg-surface-alt px-3 py-2 text-[11px] font-medium text-secondary transition hover:border-accent/35 hover:bg-surface">
+                  OpenCode
+                </button>
+                <button type="button" onClick={() => {
+                  const json = JSON.stringify({ mcpServers: { 'prd-studio': { url: mcp.endpoint, auth: 'bearer', bearerToken: mcp.token } } }, null, 2);
+                  navigator.clipboard.writeText(json);
+                }} className="rounded-input border border-border bg-surface-alt px-3 py-2 text-[11px] font-medium text-secondary transition hover:border-accent/35 hover:bg-surface">
+                  Pi (pi9)
+                </button>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <button type="button" onClick={() => { void refreshMcp(); }} className="flex-1 rounded-input bg-accent px-3 py-2 text-xs font-semibold text-accent-text shadow-card transition hover:bg-accent-hover active:scale-[0.98]">
+                Cek Koneksi
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      <div className="grid gap-4 lg:grid-cols-[1.05fr_0.95fr]">
+        <section className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+            <div>
+              <h3 className="text-sm font-black text-primary">Agent activity</h3>
+              <p className="mt-1 text-xs leading-relaxed text-secondary">
+                Panel ini dipakai untuk memantau AI agent yang mengerjakan task lewat MCP secara realtime.
+              </p>
+            </div>
+            <div
+              className={`rounded-full px-3 py-1 text-[10px] font-semibold uppercase tracking-[0.16em] ${
+                monitorState === 'live'
+                  ? 'border border-pastel-green bg-pastel-green/60 text-pastel-green-text'
+                  : monitorState === 'waiting' || monitorState === 'connecting'
+                    ? 'border border-pastel-yellow bg-pastel-yellow/60 text-pastel-yellow-text'
+                    : 'border border-border bg-surface-alt text-muted'
+              }`}
+            >
+              {monitorState === 'live' ? 'Live' : monitorState === 'waiting' ? 'Waiting' : monitorState === 'connecting' ? 'Connecting' : 'Idle'}
+            </div>
+          </div>
+
+          {monitorState === 'live' && mcp && (
+            <div className="mb-4 rounded-card border border-pastel-green bg-pastel-green/30 p-4">
+              <p className="mb-1 text-xs font-semibold text-pastel-green-text">MCP session</p>
+              <p className="break-all font-mono text-[11px] text-pastel-green-text/80">Endpoint: {mcp.endpoint}</p>
+              {mcp.last_agent && <p className="mt-1 text-[11px] text-pastel-green-text/80">Last agent: {mcp.last_agent}</p>}
+              {mcp.last_sync_at && <p className="mt-1 text-[11px] text-pastel-green-text/80">Last sync: {new Date(mcp.last_sync_at).toLocaleString('id-ID')}</p>}
+            </div>
+          )}
+
+          <div className="grid gap-3 sm:grid-cols-3">
+            <div className="rounded-card border border-border bg-surface-alt p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Task total</p>
+              <p className="mt-1 text-2xl font-black text-primary">{stats.total}</p>
+            </div>
+            <div className="rounded-card border border-border bg-surface-alt p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">In progress</p>
+              <p className="mt-1 text-2xl font-black text-primary">{stats.inProgress}</p>
+            </div>
+            <div className="rounded-card border border-border bg-surface-alt p-4">
+              <p className="text-[10px] font-semibold uppercase tracking-[0.16em] text-muted">Assigned to agent</p>
+              <p className="mt-1 text-2xl font-black text-primary">{stats.agentAssigned}</p>
+            </div>
+          </div>
+
+          <div className="mt-4 rounded-card border border-border bg-surface-alt p-4">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h4 className="text-xs font-semibold uppercase tracking-[0.16em] text-muted">Latest activity</h4>
+              <span className="font-mono text-[10px] text-muted">{events.length} event(s)</span>
+            </div>
+            <div className="max-h-[420px] space-y-2 overflow-auto pr-1">
+              {events.slice(0, 12).map((event) => {
+                const detailText = event.detail ? JSON.stringify(event.detail, null, 2) : '';
+                return (
+                <div key={event.id} className="rounded-input border border-border bg-surface px-3 py-3 transition hover:border-accent/35">
+                  <div className="flex flex-wrap items-center justify-between gap-2">
+                    <div className="min-w-0">
+                      <p className="truncate text-sm font-semibold text-primary">{event.task_title}</p>
+                      <p className="mt-0.5 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">{event.event_type} · {event.actor}</p>
+                    </div>
+                    <span className="font-mono text-[10px] text-muted">{new Date(event.timestamp).toLocaleTimeString('id-ID')}</span>
+                  </div>
+                  {detailText && (
+                    <pre className="mt-2 overflow-auto rounded-input bg-surface-alt p-3 font-mono text-[10px] leading-relaxed text-secondary">
+                      {detailText}
+                    </pre>
+                  )}
+                </div>
+                );
+              })}
+              {events.length === 0 && <p className="py-6 text-center text-xs text-muted">Belum ada activity log. Connect MCP lalu jalankan agent.</p>}
             </div>
           </div>
         </section>
-      </div>
 
+        <section className="space-y-4">
+          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
+            <div className="mb-3 flex items-center justify-between gap-3">
+              <h3 className="text-sm font-black text-primary">Task queue</h3>
+              <span className="rounded-full border border-border bg-surface-alt px-3 py-1 font-mono text-[10px] uppercase tracking-[0.16em] text-muted">
+                MCP focus
+              </span>
+            </div>
+            <TaskManager projectId={projectId} tasks={tasks as any} mcpConnected={Boolean(mcp)} onChanged={loadProject} />
+          </div>
+
+          <div className="rounded-card border border-border bg-surface/88 p-5 shadow-card backdrop-blur-xl">
+            <h3 className="text-sm font-black text-primary">How this panel works</h3>
+            <ul className="mt-3 space-y-2 text-xs leading-relaxed text-secondary">
+              <li>1. Click <span className="font-semibold text-primary">Connect MCP</span> to create a session.</li>
+              <li>2. Point your coding agent to the MCP endpoint.</li>
+              <li>3. Every task status change will stream into the activity list here.</li>
+              <li>4. Use this panel to watch which task the agent is actively touching.</li>
+            </ul>
+          </div>
+        </section>
+      </div>
     </div>
   );
 }

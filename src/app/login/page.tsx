@@ -2,9 +2,15 @@ import { getAuthSession } from '@/auth';
 import { redirect } from 'next/navigation';
 import { SignInButton } from '@/components/sign-in-button';
 
-export default async function LoginPage() {
+type Props = {
+  searchParams: Promise<{ error?: string; message?: string }>;
+};
+
+export default async function LoginPage({ searchParams }: Props) {
   const session = await getAuthSession();
   if (session) redirect('/');
+
+  const { error, message } = await searchParams;
 
   return (
     <main className="app-shell grid min-h-dvh place-items-center px-4 py-8 sm:px-6">
@@ -15,7 +21,7 @@ export default async function LoginPage() {
           <div className="relative flex h-full flex-col items-center justify-center gap-8">
             <div className="inline-flex w-fit items-center gap-2 rounded-full border border-white/35 bg-white/30 px-3 py-1 text-xs font-semibold text-primary backdrop-blur">
               <span className="size-2 rounded-full bg-accent" />
-              PRD Studio
+              RakitPRD
             </div>
             <div className="mx-auto max-w-md text-left">
               <h1 className="text-4xl font-black tracking-tight text-primary sm:text-5xl">
@@ -39,6 +45,14 @@ export default async function LoginPage() {
                 Sesi aman, project tersimpan, dan kamu bisa lanjut dari history kapan saja.
               </p>
             </div>
+
+            {error && (
+              <div className="mb-5 rounded-card border border-pastel-red bg-pastel-red p-3 text-xs text-pastel-red-text">
+                <p className="mb-1 font-semibold">Login gagal: {error}</p>
+                {message && <p>{message}</p>}
+                <p className="mt-2 opacity-70">Coba refresh halaman atau login ulang.</p>
+              </div>
+            )}
 
             <div className="mb-5 flex items-center gap-3 text-muted">
               <span className="h-px flex-1 bg-border" />
